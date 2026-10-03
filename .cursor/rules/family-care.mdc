@@ -1,0 +1,34 @@
+---
+description: Family Care platform architecture and sprint boundaries
+alwaysApply: true
+---
+
+# Family Care Platform
+
+Family digital-care platform. A caregiver manages an elderly parent's Android phone from a responsive web/PWA. This is device management, not screen mirroring.
+
+This Next.js app is both the PWA frontend and the API backend. Do not add a separate Node backend or split into a monorepo unless a sprint asks. The Android Device Owner app is a separate Kotlin project. Next.js never calls Android APIs; it creates commands that the Android agent executes.
+
+The product is multi-language. Do not hardcode user-facing copy in a way that blocks i18n. Implement localization only when a sprint requests it.
+
+## Stack
+
+Next.js, TypeScript, React, App Router, PostgreSQL, Prisma, PWA. Prefer Server Components. Use `"use client"` only for browser APIs, state, events, or PWA behavior. Database access stays on the server. Add Redis, queues, WebSockets, or SSE only when the current sprint requires them.
+
+## Domain
+
+`User` → `FamilyMember` → `Family` → `Device`. A user can join multiple families. A family can have multiple members and parent devices. A device belongs to exactly one family. Device identity is an app-generated random id. Never use IMEI, MAC, serial, or other hardware ids.
+
+Roles: `OWNER`, `CAREGIVER`, `TECHNICAL_HELPER`, `VIEWER`. Enforce them on the server: authenticated user → family membership → role → permission → resource. Do not trust route guards, hidden buttons, or client role checks.
+
+## Commands and capabilities
+
+Remote actions are commands (`PENDING` through `CANCELLED`), including while the device is offline. Do not call the device from the browser. Expose an operation only when it is officially supported, allowed by policy, and reported in device capabilities. Never assume Device Owner can silently install, uninstall, or change every setting. No root, accessibility automation, UI automation, undocumented APIs, or security bypasses.
+
+## Security and APIs
+
+REST under `/api/...`. Validate with Zod. Errors use `{ "error": { "code", "message" } }` and must not leak stacks, SQL, paths, or secrets. Never log tokens, enrollment secrets, passwords, or private keys. Enrollment tokens are random, short-lived, and single-use. Schema changes go through Prisma migrations, not `prisma db push`.
+
+## Sprint rule
+
+Implement only the sprint that was requested. Do not add future models (`EnrollmentToken`, `Command`, `Geofence`, `AuditLog`, and the rest) or features (auth, enrollment, commands, geofence, PWA, realtime) before their sprint. Reuse the existing structure. Do not rewrite working code or break existing migrations and APIs unless the sprint says so.

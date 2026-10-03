@@ -1,0 +1,408 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  CAREGIVER
+  TECHNICAL_HELPER
+  VIEWER
+
+  @@map("user_role")
+}
+
+enum DevicePlatform {
+  ANDROID
+
+  @@map("device_platform")
+}
+
+enum DeviceStatus {
+  PENDING
+  ONLINE
+  OFFLINE
+  DISABLED
+
+  @@map("device_status")
+}
+
+enum DeviceAppState {
+  ENABLED
+  DISABLED
+
+  @@map("device_app_state")
+}
+
+enum CommandType {
+  GET_DEVICE_INFO
+  GET_BATTERY
+  GET_STORAGE
+  CREATE_CONTACT
+  UPDATE_CONTACT
+  DELETE_CONTACT
+  GET_INSTALLED_APPS
+  INSTALL_APP
+  UNINSTALL_APP
+  ENABLE_APP
+  DISABLE_APP
+  GET_LOCATION
+  CREATE_GEOFENCE
+  UPDATE_GEOFENCE
+  DELETE_GEOFENCE
+  GET_SETTINGS
+  SET_SETTING
+
+  @@map("command_type")
+}
+
+enum CommandStatus {
+  PENDING
+  SENT
+  RECEIVED
+  EXECUTING
+  SUCCESS
+  FAILED
+  UNSUPPORTED
+  EXPIRED
+  CANCELLED
+
+  @@map("command_status")
+}
+
+enum LocationPermissionStatus {
+  UNKNOWN
+  PROMPT
+  GRANTED
+  DENIED
+
+  @@map("location_permission_status")
+}
+
+enum GeofenceEventType {
+  ENTERED
+  EXITED
+
+  @@map("geofence_event_type")
+}
+
+enum FamilyNotificationType {
+  GEOFENCE_ENTERED
+  GEOFENCE_EXITED
+
+  @@map("family_notification_type")
+}
+
+enum DeviceSettingSection {
+  DEVICE
+  NETWORK
+  DISPLAY
+  SOUND
+  SECURITY
+  APPLICATIONS
+
+  @@map("device_setting_section")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  memberships             FamilyMember[]
+  sessions                Session[]
+  createdEnrollmentTokens EnrollmentToken[] @relation("EnrollmentCreator")
+  createdCommands         Command[]         @relation("CommandCreator")
+  createdGeofences        Geofence[]        @relation("GeofenceCreator")
+
+  @@map("users")
+}
+
+model Family {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members          FamilyMember[]
+  devices          Device[]
+  enrollmentTokens EnrollmentToken[]
+  commands         Command[]
+  geofences        Geofence[]
+  geofenceEvents   GeofenceEvent[]
+  notifications    FamilyNotification[]
+
+  @@map("families")
+}
+
+model FamilyMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  familyId  String   @map("family_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      UserRole
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([familyId, userId])
+  @@index([userId])
+  @@index([role])
+  @@map("family_members")
+}
+
+model Device {
+  id                    String         @id @default(uuid()) @db.Uuid
+  familyId              String         @map("family_id") @db.Uuid
+  deviceIdentifier      String         @unique @map("device_identifier")
+  name                  String
+  platform              DevicePlatform
+  manufacturer          String?
+  model                 String?
+  androidVersion        String?        @map("android_version")
+  androidSdk            Int?           @map("android_sdk")
+  appVersion            String?        @map("app_version")
+  status                DeviceStatus   @default(PENDING)
+  lastSeenAt            DateTime?      @map("last_seen_at")
+  batteryLevelPercent   Int?           @map("battery_level_percent")
+  batteryCharging       Boolean?       @map("battery_charging")
+  storageTotalBytes     BigInt?        @map("storage_total_bytes")
+  storageAvailableBytes BigInt?        @map("storage_available_bytes")
+  isDeviceOwner         Boolean?       @map("is_device_owner")
+  credentialHash        String?                   @unique @map("credential_hash")
+  capabilities          Json?
+  lastLatitude          Float?                    @map("last_latitude")
+  lastLongitude         Float?                    @map("last_longitude")
+  lastLocationAt        DateTime?                 @map("last_location_at")
+  locationPermission    LocationPermissionStatus  @default(UNKNOWN) @map("location_permission")
+  locationServiceEnabled Boolean?                 @map("location_service_enabled")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+
+  /// Restrict so a family delete cannot wipe devices before later audit records exist.
+  family          Family               @relation(fields: [familyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  enrollmentToken EnrollmentToken?
+  apps            DeviceApp[]
+  contacts        DeviceContact[]
+  settings        DeviceSetting[]
+  commands        Command[]
+  geofences       Geofence[]
+  geofenceEvents  GeofenceEvent[]
+  notifications   FamilyNotification[]
+
+  @@index([familyId])
+  @@index([status])
+  @@index([lastSeenAt])
+  @@map("devices")
+}
+
+model DeviceContact {
+  id          String   @id @default(uuid()) @db.Uuid
+  deviceId    String   @map("device_id") @db.Uuid
+  contactId   String   @map("contact_id")
+  displayName String   @map("display_name")
+  phoneNumber String   @map("phone_number")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([deviceId, contactId])
+  @@index([deviceId])
+  @@index([deviceId, displayName])
+  @@map("device_contacts")
+}
+
+model DeviceSetting {
+  id        String               @id @default(uuid()) @db.Uuid
+  deviceId  String               @map("device_id") @db.Uuid
+  key       String
+  section   DeviceSettingSection
+  value     Json
+  writable  Boolean              @default(false)
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([deviceId, key])
+  @@index([deviceId])
+  @@index([deviceId, section])
+  @@map("device_settings")
+}
+
+model DeviceApp {
+  id           String         @id @default(uuid()) @db.Uuid
+  deviceId     String         @map("device_id") @db.Uuid
+  packageName  String         @map("package_name")
+  label        String
+  versionName  String?        @map("version_name")
+  iconUrl      String?        @map("icon_url")
+  state        DeviceAppState @default(ENABLED)
+  isSystem     Boolean        @default(false) @map("is_system")
+  canUninstall Boolean        @default(true) @map("can_uninstall")
+  canDisable   Boolean        @default(true) @map("can_disable")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([deviceId, packageName])
+  @@index([deviceId])
+  @@map("device_apps")
+}
+
+model AppCatalogEntry {
+  id          String   @id @default(uuid()) @db.Uuid
+  packageName String   @unique @map("package_name")
+  label       String
+  versionName String?  @map("version_name")
+  iconUrl     String?  @map("icon_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("app_catalog_entries")
+}
+
+model Command {
+  id           String        @id @default(uuid()) @db.Uuid
+  familyId     String        @map("family_id") @db.Uuid
+  deviceId     String        @map("device_id") @db.Uuid
+  createdBy    String        @map("created_by") @db.Uuid
+  type         CommandType
+  payload      Json
+  status       CommandStatus @default(PENDING)
+  resultData   Json?         @map("result_data")
+  errorCode    String?       @map("error_code")
+  errorMessage String?       @map("error_message")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  expiresAt    DateTime      @map("expires_at")
+  sentAt       DateTime?     @map("sent_at")
+  receivedAt   DateTime?     @map("received_at")
+  startedAt    DateTime?     @map("started_at")
+  completedAt  DateTime?     @map("completed_at")
+
+  family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  device  Device @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  creator User   @relation("CommandCreator", fields: [createdBy], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([deviceId, status])
+  @@index([familyId])
+  @@index([createdBy])
+  @@index([expiresAt])
+  @@map("commands")
+}
+
+model Geofence {
+  id            String             @id @default(uuid()) @db.Uuid
+  familyId      String             @map("family_id") @db.Uuid
+  deviceId      String             @map("device_id") @db.Uuid
+  createdBy     String             @map("created_by") @db.Uuid
+  name          String
+  latitude      Float
+  longitude     Float
+  radiusMeters  Int                @map("radius_meters")
+  enabled       Boolean            @default(true)
+  lastEventType GeofenceEventType? @map("last_event_type")
+  lastEventAt   DateTime?          @map("last_event_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  family  Family               @relation(fields: [familyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  device  Device               @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  creator User                 @relation("GeofenceCreator", fields: [createdBy], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  events  GeofenceEvent[]
+  notifications FamilyNotification[]
+
+  @@index([deviceId])
+  @@index([familyId])
+  @@index([enabled])
+  @@map("geofences")
+}
+
+model GeofenceEvent {
+  id         String            @id @default(uuid()) @db.Uuid
+  familyId   String            @map("family_id") @db.Uuid
+  deviceId   String            @map("device_id") @db.Uuid
+  geofenceId String            @map("geofence_id") @db.Uuid
+  type       GeofenceEventType
+  occurredAt DateTime          @map("occurred_at")
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  family       Family              @relation(fields: [familyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  device       Device              @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  geofence     Geofence            @relation(fields: [geofenceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  notification FamilyNotification?
+
+  @@index([geofenceId, occurredAt])
+  @@index([familyId, occurredAt])
+  @@index([deviceId, occurredAt])
+  @@map("geofence_events")
+}
+
+model FamilyNotification {
+  id              String                 @id @default(uuid()) @db.Uuid
+  familyId        String                 @map("family_id") @db.Uuid
+  deviceId        String?                @map("device_id") @db.Uuid
+  geofenceId      String?                @map("geofence_id") @db.Uuid
+  geofenceEventId String?                @unique @map("geofence_event_id") @db.Uuid
+  type            FamilyNotificationType
+  title           String
+  body            String
+  createdAt       DateTime               @default(now()) @map("created_at")
+  readAt          DateTime?              @map("read_at")
+
+  family        Family         @relation(fields: [familyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  device        Device?        @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  geofence      Geofence?      @relation(fields: [geofenceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  geofenceEvent GeofenceEvent? @relation(fields: [geofenceEventId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([familyId, createdAt])
+  @@index([deviceId, createdAt])
+  @@map("family_notifications")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model EnrollmentToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  familyId  String    @map("family_id") @db.Uuid
+  createdBy String    @map("created_by") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  deviceId  String?   @unique @map("device_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  family  Family  @relation(fields: [familyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  creator User    @relation("EnrollmentCreator", fields: [createdBy], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  device  Device? @relation(fields: [deviceId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("enrollment_tokens")
+}
