@@ -11,6 +11,8 @@ import { AppError } from "@/server/http/api-error";
 export type EnrollmentSessionView = {
   expiresAt: string;
   qrDataUrl: string;
+  /** One-time plaintext token for manual entry / copy (shown once). */
+  code: string;
 };
 
 export type EnrolledDeviceView = {
@@ -73,6 +75,7 @@ export async function createEnrollmentSession(userId: string, familyId: string):
   return {
     expiresAt: expiresAt.toISOString(),
     qrDataUrl,
+    code: token,
   };
 }
 

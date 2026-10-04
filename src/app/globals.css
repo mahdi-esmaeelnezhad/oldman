@@ -1,1 +1,18 @@
-/* Base styles are provided by MUI CssBaseline. */
+:root {
+  --brand-gradient: linear-gradient(145deg, #0b7fbf 0%, #20afec 55%, #4cc3f0 100%);
+  --brand-soft: #e8f6fc;
+  --page-mist: radial-gradient(1200px 500px at 100% -10%, rgba(32, 175, 236, 0.16), transparent 60%),
+    radial-gradient(900px 420px at 0% 100%, rgba(11, 127, 191, 0.1), transparent 55%), #f4f8fb;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: var(--page-mist);
+  background-attachment: fixed;
+}
+
+/* Base styles are also provided by MUI CssBaseline. */

@@ -49,7 +49,7 @@ export default async function DeviceSettingsPage({ params }: PageProps) {
   return (
     <Stack spacing={2}>
       <AppTextLink href={`/families/${familyId}/devices/${deviceId}`}>{copy.deviceDashboardTitle}</AppTextLink>
-      <Typography variant="h4" component="h1" sx={{ fontSize: { xs: "1.75rem", sm: "2.125rem" } }}>
+      <Typography variant="h4" component="h1">
         {copy.settingsTitle}
       </Typography>
       <SettingsManager

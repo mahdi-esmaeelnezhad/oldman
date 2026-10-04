@@ -1,6 +1,6 @@
 "use client";
 
-import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import Alert from "@mui/material/Alert";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
@@ -10,15 +10,18 @@ import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
+import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
 import MenuItem from "@mui/material/MenuItem";
-import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
+import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { SurfaceCard } from "@/components/surface-card";
 import { messageForApiError } from "@/config/api-errors";
-import { commandStatusLabels, commandTypeLabels, copy, deviceAppStateLabels } from "@/config/copy";
+import { commandStatusLabels, commandTypeLabels, copy } from "@/config/copy";
 import { commandStatusColor, isActiveCommand } from "@/features/commands/command-status";
 import { useFamilyRealtime } from "@/features/realtime/use-family-realtime";
 import type { AppCatalogView, DeviceAppView } from "@/server/apps/app-service";
@@ -166,89 +169,92 @@ export function AppsManager({
       {error ? <Alert severity="error">{error}</Alert> : null}
       {activeCommandId ? <Alert severity="info">{copy.waitingForDevice}</Alert> : null}
 
-      {canManage && capabilities.INSTALL_APP ? (
-        <Button
-          variant="contained"
-          onClick={() => setInstallOpen(true)}
-          disabled={pending || catalog.length === 0}
-          sx={{ alignSelf: { xs: "stretch", sm: "flex-start" } }}
-        >
-          {copy.installApp}
-        </Button>
-      ) : null}
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1.5}
+        sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}
+      >
+        <Box />
+        {canManage && capabilities.INSTALL_APP ? (
+          <Button
+            variant="contained"
+            onClick={() => setInstallOpen(true)}
+            disabled={pending || catalog.length === 0}
+          >
+            + {copy.installApp}
+          </Button>
+        ) : null}
+      </Stack>
 
-      {apps.length === 0 ? <Typography color="text.secondary">{copy.appsEmpty}</Typography> : null}
-
-      <Stack spacing={1.5}>
-        {apps.map((app) => (
-          <Paper key={app.id} variant="outlined" sx={{ p: 2 }}>
-            <Stack spacing={1.5}>
-              <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-                <Avatar src={app.iconUrl ?? undefined} variant="rounded" sx={{ width: 48, height: 48, bgcolor: "primary.main" }}>
-                  <AppsOutlinedIcon />
+      <SurfaceCard sx={{ p: { xs: 1.5, sm: 2 } }}>
+        {apps.length === 0 ? <Typography color="text.secondary">{copy.appsEmpty}</Typography> : null}
+        <Stack spacing={0} divider={<Divider flexItem />}>
+          {apps.map((app) => {
+            const canToggle =
+              canManage &&
+              capabilities.ENABLE_APP &&
+              capabilities.DISABLE_APP &&
+              app.canDisable &&
+              !app.isSystem;
+            const canDelete =
+              canManage && capabilities.UNINSTALL_APP && app.canUninstall && !app.isSystem;
+            return (
+              <Stack
+                key={app.id}
+                direction="row"
+                spacing={1.5}
+                sx={{ alignItems: "center", py: 1.25 }}
+              >
+                <Avatar
+                  src={app.iconUrl ?? undefined}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    bgcolor: "rgba(11,127,191,0.12)",
+                    color: "primary.dark",
+                    fontWeight: 500,
+                  }}
+                >
+                  {(app.label || "?").slice(0, 1)}
                 </Avatar>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography noWrap>{app.label}</Typography>
+                  <Typography sx={{ fontWeight: 500 }} noWrap>
+                    {app.label}
+                  </Typography>
                   <Typography variant="body2" color="text.secondary" noWrap>
                     {app.packageName}
                   </Typography>
                 </Box>
-                <Chip label={deviceAppStateLabels[app.state]} size="small" color={app.state === "ENABLED" ? "success" : "default"} />
+                {canToggle ? (
+                  <Switch
+                    checked={app.state === "ENABLED"}
+                    disabled={pending}
+                    onChange={() =>
+                      createCommand(
+                        app.state === "ENABLED" ? "DISABLE_APP" : "ENABLE_APP",
+                        app.packageName,
+                      )
+                    }
+                    slotProps={{ input: { "aria-label": app.label } }}
+                  />
+                ) : null}
+                {canDelete ? (
+                  <IconButton
+                    color="error"
+                    disabled={pending}
+                    onClick={() => setUninstallTarget(app)}
+                    aria-label={copy.uninstallApp}
+                  >
+                    <DeleteOutlineOutlinedIcon />
+                  </IconButton>
+                ) : null}
               </Stack>
-              <Typography variant="body2" color="text.secondary">
-                {copy.appVersion}: {app.versionName ?? copy.valueUnknown}
-              </Typography>
-              {app.isSystem ? (
-                <Typography variant="caption" color="text.secondary">
-                  {copy.systemAppHint}
-                </Typography>
-              ) : null}
-              {canManage ? (
-                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-                  {capabilities.UNINSTALL_APP && app.canUninstall && !app.isSystem ? (
-                    <Button
-                      size="small"
-                      color="error"
-                      variant="outlined"
-                      disabled={pending}
-                      onClick={() => setUninstallTarget(app)}
-                    >
-                      {copy.uninstallApp}
-                    </Button>
-                  ) : null}
-                  {capabilities.DISABLE_APP && app.canDisable && app.state === "ENABLED" ? (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      disabled={pending}
-                      onClick={() => createCommand("DISABLE_APP", app.packageName)}
-                    >
-                      {copy.disableApp}
-                    </Button>
-                  ) : null}
-                  {capabilities.ENABLE_APP && app.canDisable && app.state === "DISABLED" ? (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      disabled={pending}
-                      onClick={() => createCommand("ENABLE_APP", app.packageName)}
-                    >
-                      {copy.enableApp}
-                    </Button>
-                  ) : null}
-                  {!app.canUninstall || app.isSystem ? (
-                    <Typography variant="caption" color="text.secondary">
-                      {copy.unsupportedAction}
-                    </Typography>
-                  ) : null}
-                </Stack>
-              ) : null}
-            </Stack>
-          </Paper>
-        ))}
-      </Stack>
+            );
+          })}
+        </Stack>
+      </SurfaceCard>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
+      <SurfaceCard>
         <Typography variant="h6" sx={{ mb: 1.5 }}>
           {copy.recentCommands}
         </Typography>
@@ -273,7 +279,7 @@ export function AppsManager({
             </Stack>
           ))}
         </Stack>
-      </Paper>
+      </SurfaceCard>
 
       <Dialog open={installOpen} onClose={() => setInstallOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>{copy.installApp}</DialogTitle>

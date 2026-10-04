@@ -1,7 +1,4 @@
-import Stack from "@mui/material/Stack";
 import { notFound } from "next/navigation";
-import { AppButtonLink, AppTextLink } from "@/components/app-link";
-import { copy } from "@/config/copy";
 import { DeviceDashboardLive } from "@/features/devices/device-dashboard-live";
 import { deviceIdSchema } from "@/features/devices/schemas";
 import { familyIdSchema } from "@/features/families/schemas";
@@ -40,15 +37,5 @@ export default async function DeviceDashboardPage({ params }: PageProps) {
     notFound();
   }
 
-  return (
-    <Stack spacing={2}>
-      <AppTextLink href={`/families/${familyId}`}>{copy.backToFamily}</AppTextLink>
-      <DeviceDashboardLive familyId={familyId} device={device} />
-      <AppButtonLink href={`/families/${familyId}/devices/${deviceId}/apps`}>{copy.openApps}</AppButtonLink>
-      <AppButtonLink href={`/families/${familyId}/devices/${deviceId}/location`}>{copy.openLocation}</AppButtonLink>
-      <AppButtonLink href={`/families/${familyId}/devices/${deviceId}/contacts`}>{copy.openContacts}</AppButtonLink>
-      <AppButtonLink href={`/families/${familyId}/devices/${deviceId}/settings`}>{copy.openSettings}</AppButtonLink>
-      <AppButtonLink href={`/families/${familyId}/devices/${deviceId}/commands`}>{copy.openCommands}</AppButtonLink>
-    </Stack>
-  );
+  return <DeviceDashboardLive familyId={familyId} device={device} />;
 }

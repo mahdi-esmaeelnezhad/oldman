@@ -27,6 +27,8 @@ export type FamilyDeviceView = {
   platform: "ANDROID";
   status: "PENDING" | "ONLINE" | "OFFLINE" | "DISABLED";
   lastSeenAt: string | null;
+  manufacturer: string | null;
+  model: string | null;
 };
 
 export type FamilyDetail = {
@@ -132,6 +134,8 @@ export async function getFamilyForUser(userId: string, familyId: string): Promis
           platform: true,
           status: true,
           lastSeenAt: true,
+          manufacturer: true,
+          model: true,
         },
       },
     },
@@ -158,6 +162,8 @@ export async function getFamilyForUser(userId: string, familyId: string): Promis
       platform: device.platform,
       status: device.status,
       lastSeenAt: device.lastSeenAt ? device.lastSeenAt.toISOString() : null,
+      manufacturer: device.manufacturer,
+      model: device.model,
     })),
   };
 }

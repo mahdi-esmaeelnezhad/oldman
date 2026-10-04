@@ -1,10 +1,15 @@
 "use client";
 
+import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
 import Alert from "@mui/material/Alert";
 import Button from "@mui/material/Button";
+import InputAdornment from "@mui/material/InputAdornment";
 import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -45,18 +50,89 @@ export function RegisterForm() {
   }
 
   return (
-    <Stack component="form" method="post" spacing={2} onSubmit={onSubmit}>
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      <TextField name="firstName" label={copy.firstName} required autoComplete="given-name" />
-      <TextField name="lastName" label={copy.lastName} required autoComplete="family-name" />
-      <TextField name="email" type="email" label={copy.email} required autoComplete="email" />
-      <TextField name="password" type="password" label={copy.password} required autoComplete="new-password" />
-      <Button type="submit" variant="contained" disabled={pending}>
+    <Stack component="form" method="post" spacing={1.5} onSubmit={onSubmit}>
+      <Stack spacing={0.4} sx={{ mb: 0.25 }}>
+        <Typography
+          component="h1"
+          sx={{ m: 0, fontWeight: 500, fontSize: { xs: "1.2rem", sm: "1.3rem" }, lineHeight: 1.35 }}
+        >
+          {copy.welcomeCreate}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {copy.authWelcomeLead}
+        </Typography>
+      </Stack>
+
+      {error ? (
+        <Alert severity="error" sx={{ py: 0.35 }}>
+          {error}
+        </Alert>
+      ) : null}
+
+      <Stack direction="row" spacing={1.25}>
+        <TextField
+          name="firstName"
+          label={copy.firstName}
+          required
+          autoComplete="given-name"
+          size="small"
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment position="end">
+                  <PersonOutlineOutlinedIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+        <TextField name="lastName" label={copy.lastName} required autoComplete="family-name" size="small" />
+      </Stack>
+      <TextField
+        name="email"
+        type="email"
+        label={copy.email}
+        required
+        autoComplete="email"
+        size="small"
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <EmailOutlinedIcon fontSize="small" color="action" />
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+      <TextField
+        name="password"
+        type="password"
+        label={copy.password}
+        required
+        autoComplete="new-password"
+        size="small"
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <LockOutlinedIcon fontSize="small" color="action" />
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+
+      <Button type="submit" variant="contained" size="large" disabled={pending} fullWidth sx={{ py: 1.15 }}>
         {copy.submitRegister}
       </Button>
-      <Link component={NextLink} href="/login">
-        {copy.hasAccount} {copy.loginTitle}
-      </Link>
+
+      <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
+        {copy.hasAccount}{" "}
+        <Link component={NextLink} href="/login" underline="hover" sx={{ fontWeight: 500 }}>
+          {copy.loginTitle}
+        </Link>
+      </Typography>
     </Stack>
   );
 }

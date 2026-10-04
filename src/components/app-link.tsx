@@ -17,7 +17,12 @@ export function AppBrandLink({ href, children }: AppBrandLinkProps) {
       href={href}
       variant="h6"
       noWrap
-      sx={{ color: "inherit", textDecoration: "none", minWidth: 0 }}
+      sx={{
+        color: "text.primary",
+        textDecoration: "none",
+        minWidth: 0,
+        fontWeight: 500,
+      }}
     >
       {children}
     </Typography>

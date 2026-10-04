@@ -21,7 +21,7 @@ const apiErrorMessages = {
   APP_ALREADY_INSTALLED: "این برنامه از قبل نصب است.",
   APP_UNINSTALL_UNSUPPORTED: "حذف این برنامه پشتیبانی نمی‌شود.",
   APP_DISABLE_UNSUPPORTED: "تغییر وضعیت این برنامه پشتیبانی نمی‌شود.",
-  GEOFENCE_NOT_FOUND: "ژئوفنس پیدا نشد.",
+  GEOFENCE_NOT_FOUND: "محدودهٔ امن پیدا نشد.",
   NOTIFICATION_NOT_FOUND: "اعلان پیدا نشد.",
   LOCATION_SEARCH_FAILED: "جستجوی مکان انجام نشد.",
   CONTACT_NOT_FOUND: "مخاطب پیدا نشد.",

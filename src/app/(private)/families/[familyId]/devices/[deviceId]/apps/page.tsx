@@ -1,7 +1,8 @@
+import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { notFound } from "next/navigation";
-import { AppTextLink } from "@/components/app-link";
+import { BackNav } from "@/components/back-nav";
 import { copy } from "@/config/copy";
 import { AppsManager } from "@/features/apps/apps-manager";
 import { deviceIdSchema } from "@/features/devices/schemas";
@@ -9,6 +10,7 @@ import { familyIdSchema } from "@/features/families/schemas";
 import { getDeviceAppsPage } from "@/server/apps/app-service";
 import { requirePageUser } from "@/server/auth/session";
 import { listRecentAppCommands } from "@/server/commands/command-service";
+import { getDeviceForUser } from "@/server/devices/device-service";
 import { AppError } from "@/server/http/api-error";
 
 type PageProps = {
@@ -21,11 +23,12 @@ async function loadPage(userId: string, familyId: string, deviceId: string) {
   }
 
   try {
-    const [page, commands] = await Promise.all([
+    const [page, commands, device] = await Promise.all([
       getDeviceAppsPage(userId, familyId, deviceId),
       listRecentAppCommands(userId, familyId, deviceId),
+      getDeviceForUser(userId, familyId, deviceId),
     ]);
-    return { page, commands };
+    return { page, commands, device };
   } catch (error: unknown) {
     if (
       error instanceof AppError &&
@@ -48,10 +51,17 @@ export default async function DeviceAppsPage({ params }: PageProps) {
 
   return (
     <Stack spacing={2}>
-      <AppTextLink href={`/families/${familyId}/devices/${deviceId}`}>{copy.deviceDashboardTitle}</AppTextLink>
-      <Typography variant="h4" component="h1" sx={{ fontSize: { xs: "1.75rem", sm: "2.125rem" } }}>
-        {copy.appsTitle}
-      </Typography>
+      <Stack spacing={1}>
+        <BackNav href={`/families/${familyId}/devices/${deviceId}`} label={copy.backToDevice} />
+        <Box>
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 500 }}>
+            {copy.appsTitle}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {copy.appsSubtitlePrefix} {data.device.name}
+          </Typography>
+        </Box>
+      </Stack>
       <AppsManager
         key={`${data.page.apps.map((app) => app.packageName).join(",")}:${data.commands
           .map((command) => `${command.id}:${command.status}`)

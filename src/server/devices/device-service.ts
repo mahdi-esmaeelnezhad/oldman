@@ -6,6 +6,7 @@ import { AppError } from "@/server/http/api-error";
 export type DeviceDashboard = {
   id: string;
   familyId: string;
+  familyName: string;
   name: string;
   platform: DevicePlatform;
   status: DeviceStatus;
@@ -55,6 +56,9 @@ export async function getDeviceForUser(
       storageTotalBytes: true,
       storageAvailableBytes: true,
       isDeviceOwner: true,
+      family: {
+        select: { name: true },
+      },
     },
   });
 
@@ -65,6 +69,7 @@ export async function getDeviceForUser(
   return {
     id: device.id,
     familyId: device.familyId,
+    familyName: device.family.name,
     name: device.name,
     platform: device.platform,
     status: device.status,

@@ -1,20 +1,23 @@
 "use client";
 
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import ShieldOutlinedIcon from "@mui/icons-material/ShieldOutlined";
 import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import MenuItem from "@mui/material/MenuItem";
-import Paper from "@mui/material/Paper";
+import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
+import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { ResponsiveSheet } from "@/components/responsive-sheet";
+import { SurfaceCard } from "@/components/surface-card";
 import { messageForApiError } from "@/config/api-errors";
 import {
   copy,
@@ -32,7 +35,23 @@ import type {
 
 const GeofenceMap = dynamic(
   () => import("@/features/geofencing/geofence-map").then((module) => module.GeofenceMap),
-  { ssr: false },
+  {
+    ssr: false,
+    loading: () => (
+      <Box
+        sx={{
+          height: 320,
+          display: "grid",
+          placeItems: "center",
+          bgcolor: "rgba(11,127,191,0.04)",
+          color: "text.secondary",
+          fontSize: "0.875rem",
+        }}
+      >
+        {copy.loadingMap}
+      </Box>
+    ),
+  },
 );
 
 type LocationGeofencePanelProps = {
@@ -62,6 +81,8 @@ export function LocationGeofencePanel({
   initialNotifications,
 }: LocationGeofencePanelProps) {
   const router = useRouter();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [geofences, setGeofences] = useState(initialGeofences);
   const [notifications, setNotifications] = useState(initialNotifications);
   const [locationState, setLocationState] = useState(location);
@@ -71,6 +92,9 @@ export function LocationGeofencePanel({
   const [searchResults, setSearchResults] = useState<Array<{ label: string; latitude: number; longitude: number }>>(
     [],
   );
+  const [searching, setSearching] = useState(false);
+  const [searchAttempted, setSearchAttempted] = useState(false);
+  const [flyTo, setFlyTo] = useState<{ latitude: number; longitude: number } | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [draft, setDraft] = useState<DraftGeofence | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<GeofenceView | null>(null);
@@ -144,6 +168,10 @@ export function LocationGeofencePanel({
         : locationServiceLabels.false;
 
   function openCreate() {
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchAttempted(false);
+    setFlyTo(mapCenter);
     setDraft({
       name: "",
       latitude: mapCenter.latitude,
@@ -155,6 +183,10 @@ export function LocationGeofencePanel({
   }
 
   function openEdit(geofence: GeofenceView) {
+    setSearchQuery("");
+    setSearchResults([]);
+    setSearchAttempted(false);
+    setFlyTo({ latitude: geofence.latitude, longitude: geofence.longitude });
     setDraft({
       id: geofence.id,
       name: geofence.name,
@@ -167,17 +199,41 @@ export function LocationGeofencePanel({
   }
 
   async function searchLocation() {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setError(messageForApiError("VALIDATION_ERROR"));
+      return;
+    }
     setError(null);
-    const response = await fetch(`/api/location/search?q=${encodeURIComponent(searchQuery)}`);
+    setSearching(true);
+    setSearchAttempted(true);
+    const response = await fetch(`/api/location/search?q=${encodeURIComponent(query)}`);
+    setSearching(false);
     if (!response.ok) {
       const body = (await response.json()) as { error?: { code?: string } };
       setError(messageForApiError(body.error?.code));
+      setSearchResults([]);
       return;
     }
     const body = (await response.json()) as {
       results: Array<{ label: string; latitude: number; longitude: number }>;
     };
     setSearchResults(body.results);
+  }
+
+  function pickSearchResult(result: { label: string; latitude: number; longitude: number }) {
+    if (!draft) {
+      return;
+    }
+    setDraft({
+      ...draft,
+      latitude: result.latitude,
+      longitude: result.longitude,
+    });
+    setFlyTo({ latitude: result.latitude, longitude: result.longitude });
+    setSearchResults([]);
+    setSearchQuery(result.label);
+    setSearchAttempted(false);
   }
 
   async function saveDraft() {
@@ -280,167 +336,280 @@ export function LocationGeofencePanel({
     <Stack spacing={2.5}>
       {error ? <Alert severity="error">{error}</Alert> : null}
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="h6">{copy.locationTitle}</Typography>
-        <Alert severity={locationState.available ? "success" : "warning"} sx={{ mt: 1.5 }}>
-          {locationState.available ? copy.locationAvailable : copy.locationUnavailable}
-        </Alert>
-        <Stack spacing={1} sx={{ mt: 2 }}>
-          <Typography>
-            {copy.currentLocation}:{" "}
-            {locationState.available && locationState.latitude !== null && locationState.longitude !== null
-              ? `${locationState.latitude.toFixed(5)}, ${locationState.longitude.toFixed(5)}`
-              : copy.valueUnknown}
-          </Typography>
-          <Typography>
-            {copy.lastLocationUpdate}:{" "}
-            {locationState.lastLocationAt
-              ? formatDateTime(new Date(locationState.lastLocationAt))
-              : copy.neverSeen}
-          </Typography>
-          <Typography>
-            {copy.locationPermission}: {locationPermissionLabels[locationState.locationPermission]}
-          </Typography>
-          <Typography>
-            {copy.locationService}: {locationServiceLabel}
-          </Typography>
-        </Stack>
-      </Paper>
+      <SurfaceCard>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          {copy.currentLocation}:{" "}
+          {locationState.available && locationState.latitude !== null && locationState.longitude !== null
+            ? `${locationState.latitude.toFixed(5)}, ${locationState.longitude.toFixed(5)}`
+            : copy.valueUnknown}
+          {" · "}
+          {copy.lastLocationUpdate}:{" "}
+          {locationState.lastLocationAt
+            ? formatDateTime(new Date(locationState.lastLocationAt))
+            : copy.neverSeen}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+          {locationPermissionLabels[locationState.locationPermission]} · {locationServiceLabel}
+        </Typography>
+        <Box
+          sx={{
+            borderRadius: 1,
+            overflow: "hidden",
+            border: "1px solid",
+            borderColor: "divider",
+            minHeight: 240,
+          }}
+        >
+          <GeofenceMap
+            center={mapCenter}
+            geofences={geofences}
+            deviceLocation={
+              locationState.latitude !== null && locationState.longitude !== null
+                ? { latitude: locationState.latitude, longitude: locationState.longitude }
+                : null
+            }
+            selected={
+              draft && editorOpen
+                ? { latitude: draft.latitude, longitude: draft.longitude }
+                : null
+            }
+            radiusMeters={draft?.radiusMeters ?? 300}
+            onSelect={(latitude, longitude) => {
+              if (!locationState.canManage) {
+                return;
+              }
+              if (!editorOpen) {
+                setSearchQuery("");
+                setSearchResults([]);
+                setSearchAttempted(false);
+                setFlyTo({ latitude, longitude });
+                setDraft({
+                  name: "",
+                  latitude,
+                  longitude,
+                  radiusMeters: 300,
+                  enabled: true,
+                });
+                setEditorOpen(true);
+              }
+            }}
+          />
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
+          {copy.mapAttribution}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, textAlign: "center" }}>
+          {copy.tapMapHint}
+        </Typography>
+      </SurfaceCard>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
+      <SurfaceCard>
         <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
-          <Typography variant="h6">{copy.geofencesTitle}</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 500 }}>
+            {copy.geofencesTitle}
+          </Typography>
           {locationState.canManage ? (
             <Button variant="contained" onClick={openCreate} disabled={pending}>
-              {copy.createGeofence}
+              + {copy.createGeofence}
             </Button>
           ) : null}
         </Stack>
         {geofences.length === 0 ? <Typography color="text.secondary">{copy.geofencesEmpty}</Typography> : null}
-        <Stack spacing={1.5}>
+        <Stack spacing={0} divider={<Divider flexItem />}>
           {geofences.map((geofence) => (
-            <Paper key={geofence.id} variant="outlined" sx={{ p: 2 }}>
-              <Stack spacing={1}>
-                <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography>{geofence.name}</Typography>
-                  <Chip
-                    size="small"
-                    label={geofence.enabled ? copy.enabled : copy.disabled}
-                    color={geofence.enabled ? "success" : "default"}
+            <Stack
+              key={geofence.id}
+              direction="row"
+              spacing={1.5}
+              sx={{ alignItems: "center", py: 1.25 }}
+            >
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 2,
+                  bgcolor: "rgba(11,127,191,0.1)",
+                  color: "primary.main",
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <ShieldOutlinedIcon fontSize="small" />
+              </Box>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography
+                  sx={{ fontWeight: 500, cursor: locationState.canManage ? "pointer" : "default"  }}
+                  onClick={() => locationState.canManage && openEdit(geofence)}
+                >
+                  {geofence.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {copy.radiusMeters}: {geofence.radiusMeters} ·{" "}
+                  {geofence.enabled ? copy.enabled : copy.disabled}
+                  {geofence.lastEventType
+                    ? ` · ${geofenceEventLabels[geofence.lastEventType]}`
+                    : ""}
+                </Typography>
+              </Box>
+              {locationState.canManage ? (
+                <>
+                  <Switch
+                    checked={geofence.enabled}
+                    disabled={pending}
+                    onChange={() => toggleEnabled(geofence)}
+                    slotProps={{ input: { "aria-label": geofence.name } }}
                   />
-                </Stack>
-                <Typography variant="body2" color="text.secondary">
-                  {copy.radiusMeters}: {geofence.radiusMeters}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {copy.lastEvent}:{" "}
-                  {geofence.lastEventType ? geofenceEventLabels[geofence.lastEventType] : copy.noEventYet}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {copy.lastEventTime}:{" "}
-                  {geofence.lastEventAt ? formatDateTime(new Date(geofence.lastEventAt)) : copy.noEventYet}
-                </Typography>
-                {locationState.canManage ? (
-                  <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-                    <Button size="small" variant="outlined" disabled={pending} onClick={() => openEdit(geofence)}>
-                      {copy.editGeofence}
-                    </Button>
-                    <Button size="small" variant="outlined" disabled={pending} onClick={() => toggleEnabled(geofence)}>
-                      {geofence.enabled ? copy.disableApp : copy.enableApp}
-                    </Button>
-                    <Button
-                      size="small"
-                      color="error"
-                      variant="outlined"
-                      disabled={pending}
-                      onClick={() => setDeleteTarget(geofence)}
-                    >
-                      {copy.deleteGeofence}
-                    </Button>
-                  </Stack>
-                ) : null}
-              </Stack>
-            </Paper>
+                  <IconButton
+                    color="error"
+                    disabled={pending}
+                    onClick={() => setDeleteTarget(geofence)}
+                    aria-label={copy.deleteGeofence}
+                  >
+                    <DeleteOutlineOutlinedIcon />
+                  </IconButton>
+                </>
+              ) : null}
+            </Stack>
           ))}
         </Stack>
-      </Paper>
+      </SurfaceCard>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="h6" sx={{ mb: 1.5 }}>
+      <SurfaceCard>
+        <Typography variant="h6" sx={{ mb: 1.5, fontWeight: 500 }}>
           {copy.notificationsTitle}
         </Typography>
         {notifications.length === 0 ? (
           <Typography color="text.secondary">{copy.notificationsEmpty}</Typography>
         ) : null}
-        <Stack spacing={1.5}>
+        <Stack spacing={0} divider={<Divider flexItem />}>
           {notifications.map((notification) => (
-            <Paper key={notification.id} variant="outlined" sx={{ p: 1.5 }}>
-              <Typography>{notification.title}</Typography>
+            <Stack key={notification.id} spacing={0.5} sx={{ py: 1.25 }}>
+              <Typography sx={{ fontWeight: 500 }}>{notification.title}</Typography>
               <Typography variant="body2" color="text.secondary">
                 {formatDateTime(new Date(notification.createdAt))}
               </Typography>
               {!notification.readAt ? (
-                <Button size="small" sx={{ mt: 1 }} onClick={() => markRead(notification.id)}>
+                <Button size="small" sx={{ alignSelf: "flex-start" }} onClick={() => markRead(notification.id)}>
                   {copy.markRead}
                 </Button>
               ) : null}
-            </Paper>
+            </Stack>
           ))}
         </Stack>
-      </Paper>
+      </SurfaceCard>
 
-      <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>{draft?.id ? copy.editGeofence : copy.createGeofence}</DialogTitle>
-        <DialogContent>
-          {draft ? (
-            <Stack spacing={2} sx={{ pt: 1 }}>
+      <ResponsiveSheet
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        title={draft?.id ? copy.editGeofence : copy.createGeofence}
+        maxWidth="sm"
+        actions={
+          <>
+            <Button fullWidth={isMobile} onClick={() => setEditorOpen(false)}>
+              {copy.cancelAction}
+            </Button>
+            <Button fullWidth={isMobile} variant="contained" disabled={pending} onClick={saveDraft}>
+              {copy.saveGeofence}
+            </Button>
+          </>
+        }
+      >
+        {draft ? (
+          <Stack spacing={2} sx={{ pt: { xs: 0, sm: 1 } }}>
+            <TextField
+              label={copy.geofenceName}
+              value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              required
+            />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
               <TextField
-                label={copy.geofenceName}
-                value={draft.name}
-                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                required
+                label={copy.searchLocation}
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setSearchAttempted(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void searchLocation();
+                  }
+                }}
+                fullWidth
               />
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                <TextField
-                  label={copy.searchLocation}
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  fullWidth
-                />
-                <Button variant="outlined" onClick={searchLocation}>
-                  {copy.searchAction}
-                </Button>
+              <Button variant="outlined" onClick={() => void searchLocation()} disabled={searching}>
+                {searching ? copy.searchingLocation : copy.searchAction}
+              </Button>
+            </Stack>
+            {searchResults.length > 0 ? (
+              <Stack spacing={0.5}>
+                <Typography variant="caption" color="text.secondary">
+                  {copy.searchPickResult}
+                </Typography>
+                {searchResults.map((result) => (
+                  <Button
+                    key={`${result.latitude}-${result.longitude}-${result.label}`}
+                    variant="outlined"
+                    size="small"
+                    onClick={() => pickSearchResult(result)}
+                    sx={{
+                      justifyContent: "flex-start",
+                      textAlign: "start",
+                      borderRadius: 1,
+                      fontWeight: 400,
+                      whiteSpace: "normal",
+                      height: "auto",
+                      py: 1,
+                    }}
+                  >
+                    {result.label}
+                  </Button>
+                ))}
               </Stack>
-              {searchResults.length > 0 ? (
-                <TextField
-                  select
-                  label={copy.searchLocation}
-                  value=""
-                  onChange={(event) => {
-                    const selected = searchResults.find((item) => item.label === event.target.value);
-                    if (!selected) {
-                      return;
-                    }
-                    setDraft({
-                      ...draft,
-                      latitude: selected.latitude,
-                      longitude: selected.longitude,
-                    });
-                  }}
-                >
-                  {searchResults.map((result) => (
-                    <MenuItem key={`${result.latitude}-${result.longitude}-${result.label}`} value={result.label}>
-                      {result.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              ) : null}
+            ) : null}
+            {searchAttempted && !searching && searchResults.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                {copy.searchNoResults}
+              </Typography>
+            ) : null}
+            <Typography variant="body2" color="text.secondary">
+              {copy.drawAreaHint}
+            </Typography>
+            <Box
+              sx={{
+                borderRadius: 1,
+                overflow: "hidden",
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
               <GeofenceMap
-                center={mapCenter}
+                center={{ latitude: draft.latitude, longitude: draft.longitude }}
+                flyTo={flyTo}
                 selected={{ latitude: draft.latitude, longitude: draft.longitude }}
                 radiusMeters={draft.radiusMeters}
-                onSelect={(latitude, longitude) => setDraft({ ...draft, latitude, longitude })}
+                drawMode
+                height={isMobile ? 220 : 280}
+                onAreaChange={(area) =>
+                  setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          latitude: area.latitude,
+                          longitude: area.longitude,
+                          radiusMeters: area.radiusMeters,
+                        }
+                      : current,
+                  )
+                }
               />
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              {copy.drawnRadiusLabel}: {draft.radiusMeters} {copy.metersUnit}
+            </Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
               <TextField
                 label={copy.latitude}
                 type="number"
@@ -457,39 +626,41 @@ export function LocationGeofencePanel({
                 label={copy.radiusMeters}
                 type="number"
                 value={draft.radiusMeters}
-                onChange={(event) => setDraft({ ...draft, radiusMeters: Number(event.target.value) })}
+                onChange={(event) =>
+                  setDraft({ ...draft, radiusMeters: Number(event.target.value) })
+                }
               />
-              <Button
-                variant={draft.enabled ? "contained" : "outlined"}
-                onClick={() => setDraft({ ...draft, enabled: !draft.enabled })}
-              >
-                {draft.enabled ? copy.enabled : copy.disabled}
-              </Button>
             </Stack>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditorOpen(false)}>{copy.cancelAction}</Button>
-          <Button variant="contained" disabled={pending} onClick={saveDraft}>
-            {copy.saveGeofence}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </Stack>
+        ) : null}
+      </ResponsiveSheet>
 
-      <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} fullWidth maxWidth="xs">
-        <DialogTitle>{copy.deleteGeofence}</DialogTitle>
-        <DialogContent>
-          <Typography>
-            {deleteTarget ? deleteTarget.name : ""} — {copy.confirmAction}?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)}>{copy.cancelAction}</Button>
-          <Button color="error" variant="contained" disabled={pending} onClick={confirmDelete}>
-            {copy.deleteGeofence}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ResponsiveSheet
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        title={copy.deleteGeofence}
+        maxWidth="xs"
+        actions={
+          <>
+            <Button fullWidth={isMobile} onClick={() => setDeleteTarget(null)}>
+              {copy.cancelAction}
+            </Button>
+            <Button
+              fullWidth={isMobile}
+              color="error"
+              variant="contained"
+              disabled={pending}
+              onClick={confirmDelete}
+            >
+              {copy.deleteGeofence}
+            </Button>
+          </>
+        }
+      >
+        <Typography sx={{ pt: { xs: 0, sm: 1 } }}>
+          {deleteTarget ? deleteTarget.name : ""} — {copy.confirmAction}?
+        </Typography>
+      </ResponsiveSheet>
     </Stack>
   );
 }
