@@ -9,22 +9,24 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ResponsiveSheet } from "@/components/responsive-sheet";
-import { messageForApiError } from "@/config/api-errors";
-import { copy } from "@/config/copy";
-import { locale } from "@/config/locale";
+import { useI18n } from "@/i18n/i18n-provider";
 
 type EnrollmentPanelProps = {
   familyId: string;
 };
 
-const dateTimeFormat = new Intl.DateTimeFormat(locale.dateLocale, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
 export function EnrollmentPanel({ familyId }: EnrollmentPanelProps) {
+  const { copy, dateLocale, messageForApiError } = useI18n();
+  const dateTimeFormat = useMemo(
+    () =>
+      new Intl.DateTimeFormat(dateLocale, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }),
+    [dateLocale],
+  );
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [open, setOpen] = useState(false);

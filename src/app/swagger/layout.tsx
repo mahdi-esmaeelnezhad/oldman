@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect } from "react";
-import { locale } from "@/config/locale";
+import { defaultLocale, localeMeta } from "@/i18n/config";
 
 export default function SwaggerLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -15,12 +15,12 @@ export default function SwaggerLayout({ children }: { children: ReactNode }) {
       if (previousDir) {
         html.setAttribute("dir", previousDir);
       } else {
-        html.setAttribute("dir", locale.direction);
+        html.setAttribute("dir", localeMeta[defaultLocale].direction);
       }
       if (previousLang) {
         html.setAttribute("lang", previousLang);
       } else {
-        html.setAttribute("lang", locale.language);
+        html.setAttribute("lang", defaultLocale);
       }
     };
   }, []);

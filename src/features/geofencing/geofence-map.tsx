@@ -5,7 +5,7 @@ import type { LatLngExpression } from "leaflet";
 import L from "leaflet";
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import { copy } from "@/config/copy";
+import { useI18n } from "@/i18n/i18n-provider";
 
 const MIN_RADIUS_METERS = 50;
 const MAX_RADIUS_METERS = 50000;
@@ -193,6 +193,7 @@ export function GeofenceMap({
   onAreaChange,
   height = 320,
 }: GeofenceMapProps) {
+  const { copy } = useI18n();
   const [drawPreview, setDrawPreview] = useState<{
     center: MapArea;
     edge: { latitude: number; longitude: number };

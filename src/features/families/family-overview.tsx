@@ -16,10 +16,9 @@ import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { SurfaceCard } from "@/components/surface-card";
-import { copy, deviceStatusLabels, roleLabels } from "@/config/copy";
 import { EnrollmentPanel } from "@/features/enrollment/enrollment-panel";
 import { InviteMemberForm } from "@/features/families/invite-member-form";
-import { formatDateTime } from "@/lib/format-date-time";
+import { useI18n } from "@/i18n/i18n-provider";
 import type { DeviceStatus, UserRole } from "@/generated/prisma/enums";
 import type { FamilyNotificationView } from "@/server/geofencing/geofence-service";
 
@@ -111,6 +110,7 @@ export function FamilyOverview({
   devices,
   initialNotifications,
 }: FamilyOverviewProps) {
+  const { copy, deviceStatusLabels, roleLabels, formatDateTime } = useI18n();
   const router = useRouter();
   const [notifications, setNotifications] = useState(initialNotifications);
   const [inviteOpen, setInviteOpen] = useState(false);

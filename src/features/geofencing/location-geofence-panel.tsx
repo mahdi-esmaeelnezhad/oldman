@@ -18,39 +18,37 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ResponsiveSheet } from "@/components/responsive-sheet";
 import { SurfaceCard } from "@/components/surface-card";
-import { messageForApiError } from "@/config/api-errors";
-import {
-  copy,
-  geofenceEventLabels,
-  locationPermissionLabels,
-  locationServiceLabels,
-} from "@/config/copy";
 import { useFamilyRealtime } from "@/features/realtime/use-family-realtime";
-import { formatDateTime } from "@/lib/format-date-time";
+import { useI18n } from "@/i18n/i18n-provider";
 import type {
   DeviceLocationView,
   FamilyNotificationView,
   GeofenceView,
 } from "@/server/geofencing/geofence-service";
 
+function GeofenceMapLoading() {
+  const { copy } = useI18n();
+  return (
+    <Box
+      sx={{
+        height: 320,
+        display: "grid",
+        placeItems: "center",
+        bgcolor: "rgba(11,127,191,0.04)",
+        color: "text.secondary",
+        fontSize: "0.875rem",
+      }}
+    >
+      {copy.loadingMap}
+    </Box>
+  );
+}
+
 const GeofenceMap = dynamic(
   () => import("@/features/geofencing/geofence-map").then((module) => module.GeofenceMap),
   {
     ssr: false,
-    loading: () => (
-      <Box
-        sx={{
-          height: 320,
-          display: "grid",
-          placeItems: "center",
-          bgcolor: "rgba(11,127,191,0.04)",
-          color: "text.secondary",
-          fontSize: "0.875rem",
-        }}
-      >
-        {copy.loadingMap}
-      </Box>
-    ),
+    loading: () => <GeofenceMapLoading />,
   },
 );
 
@@ -80,6 +78,14 @@ export function LocationGeofencePanel({
   initialGeofences,
   initialNotifications,
 }: LocationGeofencePanelProps) {
+  const {
+    copy,
+    geofenceEventLabels,
+    locationPermissionLabels,
+    locationServiceLabels,
+    formatDateTime,
+    messageForApiError,
+  } = useI18n();
   const router = useRouter();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));

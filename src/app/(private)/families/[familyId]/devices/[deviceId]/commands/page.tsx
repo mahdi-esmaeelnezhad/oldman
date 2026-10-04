@@ -2,7 +2,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { notFound } from "next/navigation";
 import { AppTextLink } from "@/components/app-link";
-import { copy } from "@/config/copy";
+import { getI18n } from "@/i18n/server";
 import { CommandQueuePanel } from "@/features/commands/command-queue-panel";
 import { deviceIdSchema } from "@/features/devices/schemas";
 import { familyIdSchema } from "@/features/families/schemas";
@@ -47,6 +47,8 @@ export default async function DeviceCommandsPage({ params }: PageProps) {
   if (!data) {
     notFound();
   }
+
+  const { copy } = await getI18n();
 
   return (
     <Stack spacing={2}>

@@ -1,8 +1,10 @@
 import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
-import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
+import Box from "@mui/material/Box";
 import type { ReactNode } from "react";
 import { brand } from "@/config/brand";
+import { LanguageSwitcher } from "@/i18n/language-switcher";
+import { getI18n } from "@/i18n/server";
 
 type AuthShellProps = {
   children: ReactNode;
@@ -10,7 +12,9 @@ type AuthShellProps = {
   lockViewport?: boolean;
 };
 
-export function AuthShell({ children, lockViewport = true }: AuthShellProps) {
+export async function AuthShell({ children, lockViewport = true }: AuthShellProps) {
+  const { brandName } = await getI18n();
+
   return (
     <Box
       sx={{
@@ -21,13 +25,24 @@ export function AuthShell({ children, lockViewport = true }: AuthShellProps) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        px: 2.5,
-        py: { xs: 2, md: 4 },
+        px: 2,
+        py: 2,
         bgcolor: "#FAFBFD",
         backgroundImage:
           "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(32, 175, 236, 0.18), transparent 55%)",
       }}
     >
+      <Box
+        sx={{
+          position: "absolute",
+          top: 10,
+          insetInlineEnd: 10,
+          zIndex: 2,
+        }}
+      >
+        <LanguageSwitcher />
+      </Box>
+
       {/* Soft curved brand wash — Art of Plants inspired, compact */}
       <Box
         aria-hidden
@@ -35,7 +50,7 @@ export function AuthShell({ children, lockViewport = true }: AuthShellProps) {
           position: "absolute",
           insetInline: 0,
           top: 0,
-          height: { xs: 140, sm: 160 },
+          height: 140,
           background: brand.gradient,
           borderBottomLeftRadius: "50% 28%",
           borderBottomRightRadius: "50% 28%",
@@ -48,11 +63,11 @@ export function AuthShell({ children, lockViewport = true }: AuthShellProps) {
           position: "relative",
           zIndex: 1,
           width: "100%",
-          maxWidth: 400,
+          maxWidth: "100%",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: { xs: 1.75, sm: 2.25 },
+          gap: 1.75,
         }}
       >
         <Box
@@ -93,7 +108,7 @@ export function AuthShell({ children, lockViewport = true }: AuthShellProps) {
             textAlign: "center",
           }}
         >
-          {brand.name}
+          {brandName}
         </Typography>
 
         <Box

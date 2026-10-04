@@ -20,8 +20,7 @@ import Typography from "@mui/material/Typography";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SurfaceCard } from "@/components/surface-card";
-import { messageForApiError } from "@/config/api-errors";
-import { commandStatusLabels, commandTypeLabels, copy } from "@/config/copy";
+import { useI18n } from "@/i18n/i18n-provider";
 import { commandStatusColor, isActiveCommand } from "@/features/commands/command-status";
 import { useFamilyRealtime } from "@/features/realtime/use-family-realtime";
 import type { AppCatalogView, DeviceAppView } from "@/server/apps/app-service";
@@ -83,6 +82,7 @@ export function AppsManager({
   initialCatalog,
   initialCommands,
 }: AppsManagerProps) {
+  const { copy, commandStatusLabels, commandTypeLabels, messageForApiError } = useI18n();
   const router = useRouter();
   const [apps, setApps] = useState(initialApps);
   const [catalog, setCatalog] = useState(initialCatalog);

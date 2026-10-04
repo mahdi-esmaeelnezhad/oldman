@@ -12,10 +12,10 @@ import Typography from "@mui/material/Typography";
 import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { messageForApiError } from "@/config/api-errors";
-import { copy } from "@/config/copy";
+import { useI18n } from "@/i18n/i18n-provider";
 
 export function LoginForm() {
+  const { copy, messageForApiError } = useI18n();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);

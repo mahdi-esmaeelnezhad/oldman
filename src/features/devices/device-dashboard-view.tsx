@@ -1,3 +1,5 @@
+"use client";
+
 import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import ContactsOutlinedIcon from "@mui/icons-material/ContactsOutlined";
 import ListAltOutlinedIcon from "@mui/icons-material/ListAltOutlined";
@@ -14,8 +16,7 @@ import NextLink from "next/link";
 import type { ReactNode } from "react";
 import { BackNav } from "@/components/back-nav";
 import { SurfaceCard } from "@/components/surface-card";
-import { copy, deviceStatusLabels, platformLabels } from "@/config/copy";
-import { formatDateTime } from "@/lib/format-date-time";
+import { useI18n } from "@/i18n/i18n-provider";
 import { formatBytes, storageUsedPercent } from "@/lib/format-storage";
 import type { DeviceDashboard } from "@/server/devices/device-service";
 import type { DeviceStatus } from "@/generated/prisma/enums";
@@ -99,12 +100,14 @@ function ModuleTile({
 }
 
 export function DeviceDashboardView({ device }: DeviceDashboardViewProps) {
+  const { copy, deviceStatusLabels, platformLabels, formatDateTime, dateLocale } = useI18n();
   const usedPercent = storageUsedPercent(device.storageTotalBytes, device.storageAvailableBytes);
-  const totalLabel = formatBytes(device.storageTotalBytes);
+  const totalLabel = formatBytes(device.storageTotalBytes, dateLocale);
   const usedLabel =
     device.storageTotalBytes && device.storageAvailableBytes
       ? formatBytes(
           (BigInt(device.storageTotalBytes) - BigInt(device.storageAvailableBytes)).toString(),
+          dateLocale,
         )
       : null;
   const modelLabel = [device.manufacturer, device.model].filter(Boolean).join(" ") || device.name;

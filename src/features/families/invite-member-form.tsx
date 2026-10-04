@@ -7,8 +7,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { messageForApiError } from "@/config/api-errors";
-import { copy, roleLabels } from "@/config/copy";
+import { useI18n } from "@/i18n/i18n-provider";
 import { userRoles } from "@/features/families/schemas";
 
 type InviteMemberFormProps = {
@@ -16,6 +15,7 @@ type InviteMemberFormProps = {
 };
 
 export function InviteMemberForm({ familyId }: InviteMemberFormProps) {
+  const { copy, roleLabels, messageForApiError } = useI18n();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);

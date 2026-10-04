@@ -3,7 +3,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { notFound } from "next/navigation";
 import { BackNav } from "@/components/back-nav";
-import { copy } from "@/config/copy";
+import { getI18n } from "@/i18n/server";
 import { AppsManager } from "@/features/apps/apps-manager";
 import { deviceIdSchema } from "@/features/devices/schemas";
 import { familyIdSchema } from "@/features/families/schemas";
@@ -48,6 +48,8 @@ export default async function DeviceAppsPage({ params }: PageProps) {
   if (!data) {
     notFound();
   }
+
+  const { copy } = await getI18n();
 
   return (
     <Stack spacing={2}>

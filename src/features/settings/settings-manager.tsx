@@ -11,14 +11,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { messageForApiError } from "@/config/api-errors";
-import {
-  commandStatusLabels,
-  commandTypeLabels,
-  copy,
-  deviceSettingKeyLabels,
-  deviceSettingSectionLabels,
-} from "@/config/copy";
+import { useI18n } from "@/i18n/i18n-provider";
 import { deviceSettingSections } from "@/config/device-settings";
 import { commandStatusColor, isActiveCommand } from "@/features/commands/command-status";
 import { useFamilyRealtime } from "@/features/realtime/use-family-realtime";
@@ -37,13 +30,6 @@ type SettingsManagerProps = {
   initialSettings: DeviceSettingView[];
   initialCommands: CommandView[];
 };
-
-function settingLabel(key: string): string {
-  if (key in deviceSettingKeyLabels) {
-    return deviceSettingKeyLabels[key as keyof typeof deviceSettingKeyLabels];
-  }
-  return key;
-}
 
 function toCommandView(command: RealtimeCommandSnapshot): CommandView {
   return {
@@ -75,6 +61,22 @@ export function SettingsManager({
   initialSettings,
   initialCommands,
 }: SettingsManagerProps) {
+  const {
+    copy,
+    commandStatusLabels,
+    commandTypeLabels,
+    deviceSettingKeyLabels,
+    deviceSettingSectionLabels,
+    messageForApiError,
+  } = useI18n();
+
+  function settingLabel(key: string): string {
+    if (key in deviceSettingKeyLabels) {
+      return deviceSettingKeyLabels[key as keyof typeof deviceSettingKeyLabels];
+    }
+    return key;
+  }
+
   const router = useRouter();
   const [settings, setSettings] = useState(initialSettings);
   const [draftValues, setDraftValues] = useState<Record<string, JsonSettingValue>>(() =>

@@ -13,8 +13,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { messageForApiError } from "@/config/api-errors";
-import { commandStatusLabels, commandTypeLabels, copy } from "@/config/copy";
+import { useI18n } from "@/i18n/i18n-provider";
 import { commandStatusColor, isActiveCommand } from "@/features/commands/command-status";
 import { useFamilyRealtime } from "@/features/realtime/use-family-realtime";
 import type { DeviceContactView } from "@/server/contacts/contact-service";
@@ -69,6 +68,7 @@ export function ContactsManager({
   initialCommands,
   initialSearch,
 }: ContactsManagerProps) {
+  const { copy, commandStatusLabels, commandTypeLabels, messageForApiError } = useI18n();
   const router = useRouter();
   const [contacts, setContacts] = useState(initialContacts);
   const [commands, setCommands] = useState(initialCommands);

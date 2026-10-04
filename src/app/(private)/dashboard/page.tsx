@@ -3,7 +3,7 @@ import Typography from "@mui/material/Typography";
 import { AppButtonLink } from "@/components/app-link";
 import { PageHeader } from "@/components/page-header";
 import { SurfaceCard } from "@/components/surface-card";
-import { copy, roleLabels } from "@/config/copy";
+import { getI18n } from "@/i18n/server";
 import { CreateFamilyForm } from "@/features/families/create-family-form";
 import { requirePageUser } from "@/server/auth/session";
 import { listFamiliesForUser } from "@/server/families/family-service";
@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requirePageUser();
+  const { copy, roleLabels } = await getI18n();
   const families = await listFamiliesForUser(user.id);
 
   return (

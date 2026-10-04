@@ -7,11 +7,9 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { useState } from "react";
-import { messageForApiError } from "@/config/api-errors";
-import { commandStatusLabels, commandTypeLabels, copy } from "@/config/copy";
 import { commandStatusColor, isActiveCommand, isCancellableCommand } from "@/features/commands/command-status";
 import { useFamilyRealtime } from "@/features/realtime/use-family-realtime";
-import { formatDateTime } from "@/lib/format-date-time";
+import { useI18n } from "@/i18n/i18n-provider";
 import type { CommandView } from "@/server/commands/command-service";
 
 type CommandQueuePanelProps = {
@@ -27,6 +25,8 @@ export function CommandQueuePanel({
   canManage,
   initialCommands,
 }: CommandQueuePanelProps) {
+  const { copy, commandStatusLabels, commandTypeLabels, formatDateTime, messageForApiError } =
+    useI18n();
   const [commands, setCommands] = useState(initialCommands);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);

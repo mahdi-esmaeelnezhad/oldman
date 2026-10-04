@@ -2,7 +2,7 @@ import Stack from "@mui/material/Stack";
 import { notFound } from "next/navigation";
 import { BackNav } from "@/components/back-nav";
 import { PageHeader } from "@/components/page-header";
-import { copy, roleLabels } from "@/config/copy";
+import { getI18n } from "@/i18n/server";
 import { familyIdSchema } from "@/features/families/schemas";
 import { FamilyOverview } from "@/features/families/family-overview";
 import { canEnrollDevices, canInviteMembers } from "@/server/auth/authorization";
@@ -44,6 +44,7 @@ export default async function FamilyPage({ params }: PageProps) {
   }
 
   const { family, notifications } = data;
+  const { copy, roleLabels } = await getI18n();
 
   return (
     <Stack spacing={2.5}>

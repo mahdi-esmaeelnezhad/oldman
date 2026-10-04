@@ -7,7 +7,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { useEffect, useState } from "react";
 import { ResponsiveSheet } from "@/components/responsive-sheet";
-import { copy } from "@/config/copy";
+import { useI18n } from "@/i18n/i18n-provider";
 
 const DISMISS_KEY = "family-care-install-dismissed";
 
@@ -38,6 +38,7 @@ function isStandaloneDisplay(): boolean {
 
 /** iOS Share → Add to Home Screen guide, plus Chromium install prompt when available. */
 export function InstallPrompt() {
+  const { copy } = useI18n();
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(false);
   const [isIos, setIsIos] = useState(false);

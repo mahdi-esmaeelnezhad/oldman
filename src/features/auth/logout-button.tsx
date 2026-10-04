@@ -4,9 +4,10 @@ import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import { useRouter } from "next/navigation";
-import { copy } from "@/config/copy";
+import { useI18n } from "@/i18n/i18n-provider";
 
 export function LogoutButton() {
+  const { copy } = useI18n();
   const router = useRouter();
 
   async function onClick() {

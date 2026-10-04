@@ -1,12 +1,9 @@
-import { locale } from "@/config/locale";
-
-const byteFormat = new Intl.NumberFormat(locale.dateLocale, {
-  maximumFractionDigits: 1,
-});
-
 const UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
 
-export function formatBytes(value: string | number | bigint | null | undefined): string | null {
+export function formatBytes(
+  value: string | number | bigint | null | undefined,
+  dateLocale = "fa-IR",
+): string | null {
   if (value === null || value === undefined) {
     return null;
   }
@@ -23,6 +20,10 @@ export function formatBytes(value: string | number | bigint | null | undefined):
     unitIndex += 1;
   }
 
+  const byteFormat = new Intl.NumberFormat(dateLocale, {
+    maximumFractionDigits: 1,
+  });
+
   return `${byteFormat.format(amount)} ${UNITS[unitIndex]}`;
 }
 
@@ -37,12 +38,13 @@ export function storageUsedPercent(
     return null;
   }
 
-  const total = Number(totalBytes);
-  const available = Number(availableBytes);
-  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(available) || available < 0) {
+  const total = typeof totalBytes === "bigint" ? Number(totalBytes) : Number(totalBytes);
+  const available =
+    typeof availableBytes === "bigint" ? Number(availableBytes) : Number(availableBytes);
+  if (!Number.isFinite(total) || !Number.isFinite(available) || total <= 0) {
     return null;
   }
 
-  const used = Math.max(0, Math.min(100, ((total - available) / total) * 100));
-  return Math.round(used);
+  const used = Math.max(0, total - available);
+  return Math.max(0, Math.min(100, Math.round((used / total) * 100)));
 }

@@ -15,13 +15,14 @@ export function AppBrandLink({ href, children }: AppBrandLinkProps) {
     <Typography
       component={NextLink}
       href={href}
-      variant="h6"
+      variant="subtitle1"
       noWrap
       sx={{
         color: "text.primary",
         textDecoration: "none",
         minWidth: 0,
         fontWeight: 500,
+        fontSize: "0.95rem",
       }}
     >
       {children}

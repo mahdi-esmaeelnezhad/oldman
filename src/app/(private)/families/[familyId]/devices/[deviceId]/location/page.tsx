@@ -3,7 +3,8 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { notFound } from "next/navigation";
 import { BackNav } from "@/components/back-nav";
-import { copy } from "@/config/copy";
+import { localeMeta } from "@/i18n/config";
+import { getI18n } from "@/i18n/server";
 import { deviceIdSchema } from "@/features/devices/schemas";
 import { familyIdSchema } from "@/features/families/schemas";
 import { LocationGeofencePanel } from "@/features/geofencing/location-geofence-panel";
@@ -54,6 +55,9 @@ export default async function DeviceLocationPage({ params }: PageProps) {
     notFound();
   }
 
+  const { copy, locale } = await getI18n();
+  const { dateLocale } = localeMeta[locale];
+
   return (
     <Stack spacing={2}>
       <Stack spacing={1}>
@@ -65,7 +69,7 @@ export default async function DeviceLocationPage({ params }: PageProps) {
           <Typography variant="body2" color="text.secondary">
             {data.device.name}
             {data.location.lastLocationAt
-              ? ` · ${formatDateTime(new Date(data.location.lastLocationAt))}`
+              ? ` · ${formatDateTime(new Date(data.location.lastLocationAt), dateLocale)}`
               : ""}
           </Typography>
         </Box>

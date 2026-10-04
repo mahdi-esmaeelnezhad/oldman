@@ -1,10 +1,6 @@
-import { locale } from "@/config/locale";
-
-const dateTimeFormat = new Intl.DateTimeFormat(locale.dateLocale, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
-export function formatDateTime(value: Date): string {
-  return dateTimeFormat.format(value);
+export function formatDateTime(value: Date, dateLocale = "fa-IR"): string {
+  return new Intl.DateTimeFormat(dateLocale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
 }
