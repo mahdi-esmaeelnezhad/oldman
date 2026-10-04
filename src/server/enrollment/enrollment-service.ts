@@ -3,6 +3,7 @@ import { demoDeviceCapabilities } from "@/config/device-capabilities";
 import { enrollmentTtlSeconds } from "@/config/session";
 import type { EnrollmentQrPayload } from "@/types/contracts/enrollment";
 import { prisma } from "@/lib/prisma";
+import { recordAuditLog } from "@/server/audit/audit-service";
 import { requireEnrollmentPermission } from "@/server/auth/authorization";
 import { createSecretToken, hashSecret } from "@/server/auth/secrets";
 import { AppError } from "@/server/http/api-error";
@@ -58,6 +59,17 @@ export async function createEnrollmentSession(userId: string, familyId: string):
     width: 280,
   });
 
+  await recordAuditLog({
+    familyId,
+    actorUserId: userId,
+    action: "ENROLLMENT_CREATED",
+    status: "SUCCESS",
+    result: "Enrollment session created",
+    metadata: {
+      expiresAt: expiresAt.toISOString(),
+    },
+  });
+
   return {
     expiresAt: expiresAt.toISOString(),
     qrDataUrl,
@@ -87,7 +99,7 @@ export async function redeemEnrollmentToken(input: RedeemInput): Promise<Enrolle
 
       const enrollment = await tx.enrollmentToken.findUnique({
         where: { tokenHash },
-        select: { id: true, familyId: true },
+        select: { id: true, familyId: true, createdBy: true },
       });
 
       if (!enrollment) {
@@ -126,9 +138,32 @@ export async function redeemEnrollmentToken(input: RedeemInput): Promise<Enrolle
         id: device.id,
         familyId: device.familyId,
         name: device.name,
-        platform: "ANDROID",
-        status: "PENDING",
+        platform: "ANDROID" as const,
+        status: "PENDING" as const,
         deviceCredential,
+        actorUserId: enrollment.createdBy,
+      };
+    }).then(async (enrolled) => {
+      await recordAuditLog({
+        familyId: enrolled.familyId,
+        actorUserId: enrolled.actorUserId,
+        deviceId: enrolled.id,
+        action: "DEVICE_ENROLLED",
+        status: "SUCCESS",
+        result: "Device enrolled",
+        metadata: {
+          deviceName: enrolled.name,
+          platform: enrolled.platform,
+        },
+      });
+
+      return {
+        id: enrolled.id,
+        familyId: enrolled.familyId,
+        name: enrolled.name,
+        platform: enrolled.platform,
+        status: enrolled.status,
+        deviceCredential: enrolled.deviceCredential,
       };
     });
   } catch (error: unknown) {

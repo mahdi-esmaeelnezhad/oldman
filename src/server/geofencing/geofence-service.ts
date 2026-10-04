@@ -4,7 +4,9 @@ import {
   canManageGeofences,
   requireFamilyMember,
   requireGeofenceManagementPermission,
+  requireLocationViewPermission,
 } from "@/server/auth/authorization";
+import { recordAuditLog, safeCommandAuditMetadata } from "@/server/audit/audit-service";
 import { publishDbCommand } from "@/server/commands/command-service";
 import { AppError } from "@/server/http/api-error";
 import {
@@ -111,7 +113,7 @@ export async function getDeviceLocation(
   familyId: string,
   deviceId: string,
 ): Promise<DeviceLocationView> {
-  const membership = await requireFamilyMember(userId, familyId);
+  const membership = await requireLocationViewPermission(userId, familyId);
   const device = await requireDeviceInFamily(familyId, deviceId);
   const available =
     device.lastLatitude !== null &&
@@ -138,7 +140,7 @@ export async function listGeofencesForDevice(
   familyId: string,
   deviceId: string,
 ): Promise<GeofenceView[]> {
-  await requireFamilyMember(userId, familyId);
+  await requireLocationViewPermission(userId, familyId);
   await requireDeviceInFamily(familyId, deviceId);
   const geofences = await prisma.geofence.findMany({
     where: { familyId, deviceId },
@@ -184,6 +186,7 @@ export async function createGeofence(
         createdBy: userId,
         type: "CREATE_GEOFENCE",
         payload: {
+          geofenceId: created.id,
           name: created.name,
           latitude: created.latitude,
           longitude: created.longitude,
@@ -198,6 +201,20 @@ export async function createGeofence(
   });
 
   publishDbCommand(geofence.command);
+  await recordAuditLog({
+    familyId,
+    actorUserId: userId,
+    deviceId,
+    commandId: geofence.command.id,
+    action: "GEOFENCE_CREATED",
+    status: "SUCCESS",
+    result: "Geofence created",
+    metadata: safeCommandAuditMetadata({
+      type: "CREATE_GEOFENCE",
+      status: "PENDING",
+      geofenceId: geofence.created.id,
+    }),
+  });
   return serializeGeofence(geofence.created);
 }
 
@@ -259,6 +276,20 @@ export async function updateGeofence(
   });
 
   publishDbCommand(geofence.command);
+  await recordAuditLog({
+    familyId,
+    actorUserId: userId,
+    deviceId,
+    commandId: geofence.command.id,
+    action: "GEOFENCE_UPDATED",
+    status: "SUCCESS",
+    result: "Geofence updated",
+    metadata: safeCommandAuditMetadata({
+      type: "UPDATE_GEOFENCE",
+      status: "PENDING",
+      geofenceId: geofence.updated.id,
+    }),
+  });
   return serializeGeofence(geofence.updated);
 }
 
@@ -295,6 +326,20 @@ export async function deleteGeofence(
     return command;
   });
   publishDbCommand(result);
+  await recordAuditLog({
+    familyId,
+    actorUserId: userId,
+    deviceId,
+    commandId: result.id,
+    action: "GEOFENCE_DELETED",
+    status: "SUCCESS",
+    result: "Geofence deleted",
+    metadata: safeCommandAuditMetadata({
+      type: "DELETE_GEOFENCE",
+      status: "PENDING",
+      geofenceId,
+    }),
+  });
 }
 
 export async function updateDeviceLocationFromAgent(

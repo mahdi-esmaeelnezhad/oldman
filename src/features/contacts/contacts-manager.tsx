@@ -14,7 +14,7 @@ import Typography from "@mui/material/Typography";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { messageForApiError } from "@/config/api-errors";
-import { commandStatusLabels, copy } from "@/config/copy";
+import { commandStatusLabels, commandTypeLabels, copy } from "@/config/copy";
 import { commandStatusColor, isActiveCommand } from "@/features/commands/command-status";
 import { useFamilyRealtime } from "@/features/realtime/use-family-realtime";
 import type { DeviceContactView } from "@/server/contacts/contact-service";
@@ -145,7 +145,9 @@ export function ContactsManager({
       return;
     }
     const result = (await response.json()) as { command: CommandView };
-    setCommands((current) => [result.command, ...current].slice(0, 20));
+    setCommands((current) =>
+      [result.command, ...current.filter((item) => item.id !== result.command.id)].slice(0, 20),
+    );
     setActiveCommandId(result.command.id);
   }
 
@@ -268,7 +270,7 @@ export function ContactsManager({
           <Stack spacing={1}>
             {commands.map((command) => (
               <Stack key={command.id} direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <Typography variant="body2">{command.type}</Typography>
+                <Typography variant="body2">{commandTypeLabels[command.type]}</Typography>
                 <Chip size="small" label={commandStatusLabels[command.status]} color={commandStatusColor(command.status)} />
               </Stack>
             ))}

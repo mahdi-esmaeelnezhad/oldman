@@ -22,7 +22,8 @@ export function InviteMemberForm({ familyId }: InviteMemberFormProps) {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setPending(true);
     setError(null);
 
@@ -42,7 +43,7 @@ export function InviteMemberForm({ familyId }: InviteMemberFormProps) {
       return;
     }
 
-    event.currentTarget.reset();
+    formElement.reset();
     router.refresh();
   }
 

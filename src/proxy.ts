@@ -6,17 +6,16 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPrivate = pathname.startsWith("/dashboard") || pathname.startsWith("/families");
 
+  // Only gate private routes by cookie presence. Valid-session checks and
+  // login/register redirects happen in Server Components so a stale cookie
+  // cannot bounce between /login and /dashboard forever.
   if (isPrivate && !hasSession) {
     return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  if (hasSession && (pathname === "/login" || pathname === "/register")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/families/:path*", "/login", "/register"],
+  matcher: ["/dashboard/:path*", "/families/:path*"],
 };

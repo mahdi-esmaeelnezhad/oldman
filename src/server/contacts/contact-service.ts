@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { canManageContacts, requireFamilyMember } from "@/server/auth/authorization";
+import { canManageContacts, requireDeviceViewPermission } from "@/server/auth/authorization";
 import { parseDeviceCapabilities } from "@/server/devices/capabilities";
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/server/http/api-error";
@@ -44,7 +44,7 @@ export async function getDeviceContactsPage(
   deviceId: string,
   search?: string,
 ): Promise<DeviceContactsPage> {
-  const membership = await requireFamilyMember(userId, familyId);
+  const membership = await requireDeviceViewPermission(userId, familyId);
   const device = await prisma.device.findFirst({
     where: { id: deviceId, familyId },
     select: { id: true, capabilities: true },

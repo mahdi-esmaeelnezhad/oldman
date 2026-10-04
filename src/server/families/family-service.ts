@@ -1,5 +1,6 @@
 import type { UserRole } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
+import { recordAuditLog } from "@/server/audit/audit-service";
 import { requireFamilyMember, requireOwner } from "@/server/auth/authorization";
 import { AppError } from "@/server/http/api-error";
 import { normalizeEmail } from "@/server/users/normalize-email";
@@ -198,6 +199,18 @@ export async function inviteFamilyMember(
       select: {
         id: true,
         role: true,
+      },
+    });
+
+    await recordAuditLog({
+      familyId,
+      actorUserId: userId,
+      action: "MEMBER_INVITED",
+      status: "SUCCESS",
+      result: "Family member invited",
+      metadata: {
+        invitedUserId: user.id,
+        role: member.role,
       },
     });
 

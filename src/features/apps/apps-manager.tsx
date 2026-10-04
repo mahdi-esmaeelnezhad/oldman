@@ -18,7 +18,7 @@ import Typography from "@mui/material/Typography";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { messageForApiError } from "@/config/api-errors";
-import { commandStatusLabels, copy, deviceAppStateLabels } from "@/config/copy";
+import { commandStatusLabels, commandTypeLabels, copy, deviceAppStateLabels } from "@/config/copy";
 import { commandStatusColor, isActiveCommand } from "@/features/commands/command-status";
 import { useFamilyRealtime } from "@/features/realtime/use-family-realtime";
 import type { AppCatalogView, DeviceAppView } from "@/server/apps/app-service";
@@ -263,7 +263,7 @@ export function AppsManager({
             >
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" noWrap>
-                  {command.type}
+                  {commandTypeLabels[command.type]}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" noWrap>
                   {typeof command.payload.packageName === "string" ? command.payload.packageName : ""}

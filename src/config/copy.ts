@@ -1,4 +1,5 @@
 import type { DevicePlatform, DeviceStatus, UserRole } from "@/generated/prisma/enums";
+import type { CommandType } from "@/types/contracts/command";
 import type { CommandStatus } from "@/types/contracts/command-status";
 
 type DeviceAppState = "ENABLED" | "DISABLED";
@@ -169,6 +170,26 @@ export const commandStatusLabels = {
   EXPIRED: "منقضی",
   CANCELLED: "لغو شده",
 } as const satisfies Record<CommandStatus, string>;
+
+export const commandTypeLabels = {
+  GET_DEVICE_INFO: "دریافت اطلاعات دستگاه",
+  GET_BATTERY: "دریافت باتری",
+  GET_STORAGE: "دریافت حافظه",
+  CREATE_CONTACT: "افزودن مخاطب",
+  UPDATE_CONTACT: "ویرایش مخاطب",
+  DELETE_CONTACT: "حذف مخاطب",
+  GET_INSTALLED_APPS: "دریافت برنامه‌ها",
+  INSTALL_APP: "نصب برنامه",
+  UNINSTALL_APP: "حذف برنامه",
+  ENABLE_APP: "فعال‌سازی برنامه",
+  DISABLE_APP: "غیرفعال‌سازی برنامه",
+  GET_LOCATION: "دریافت موقعیت",
+  CREATE_GEOFENCE: "ساخت ژئوفنس",
+  UPDATE_GEOFENCE: "ویرایش ژئوفنس",
+  DELETE_GEOFENCE: "حذف ژئوفنس",
+  GET_SETTINGS: "دریافت تنظیمات",
+  SET_SETTING: "اعمال تنظیم",
+} as const satisfies Record<CommandType, string>;
 
 export const platformLabels = {
   ANDROID: "اندروید",

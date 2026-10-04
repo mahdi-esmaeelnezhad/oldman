@@ -17,11 +17,13 @@ import {
   applyUpdatedContact,
 } from "@/server/contacts/contact-service";
 import { applyInstalledApp } from "@/server/apps/app-service";
+import { recordAuditLog, safeCommandAuditMetadata } from "@/server/audit/audit-service";
 import {
-  canEnrollDevices,
   requireAppManagementPermission,
   requireContactManagementPermission,
-  requireFamilyMember,
+  requireDeviceManagePermission,
+  requireDeviceViewPermission,
+  requireSecurityManagementPermission,
   requireSettingsManagementPermission,
 } from "@/server/auth/authorization";
 import { parseDeviceCapabilities } from "@/server/devices/capabilities";
@@ -31,6 +33,25 @@ import { applySettingValue, applySettingsSnapshot } from "@/server/settings/sett
 import { isCommandSupported } from "@/types/contracts/device-capability";
 import type { CommandPayloadByType, CommandType, JsonSettingValue } from "@/types/contracts/command";
 import type { CommandResultStatus } from "@/types/contracts/command-status";
+
+function auditMetadataForCommand(
+  type: string,
+  payload: unknown,
+  extras?: { status?: string; errorCode?: string | null },
+) {
+  const record = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? (payload as Record<string, unknown>)
+    : {};
+  return safeCommandAuditMetadata({
+    type,
+    status: extras?.status,
+    errorCode: extras?.errorCode,
+    packageName: typeof record.packageName === "string" ? record.packageName : undefined,
+    contactId: typeof record.contactId === "string" ? record.contactId : undefined,
+    settingKey: typeof record.key === "string" ? record.key : undefined,
+    geofenceId: typeof record.geofenceId === "string" ? record.geofenceId : undefined,
+  });
+}
 
 export type CommandView = {
   commandId: string;
@@ -157,6 +178,19 @@ async function expireIfNeeded(
     },
   });
   emitCommand(serializeCommand(expired));
+  await recordAuditLog({
+    familyId: expired.familyId,
+    actorUserId: expired.createdBy,
+    deviceId: expired.deviceId,
+    commandId: expired.id,
+    action: "COMMAND_EXPIRED",
+    status: "FAILED",
+    result: "Command expired",
+    metadata: auditMetadataForCommand(expired.type, expired.payload, {
+      status: expired.status,
+      errorCode: expired.errorCode,
+    }),
+  });
   return expired;
 }
 
@@ -298,7 +332,20 @@ export async function createSettingsCommand(
   type: SettingsCommandType,
   payload: CommandPayloadByType[SettingsCommandType],
 ): Promise<CommandView> {
-  await requireSettingsManagementPermission(userId, familyId);
+  if (type === "SET_SETTING") {
+    const definition = getDeviceSettingDefinition(payload.key);
+    if (!definition || !definition.writable || !isValidSettingValue(definition, payload.value)) {
+      throw new AppError(400, "SETTING_UNSUPPORTED", "That setting cannot be changed on this device.");
+    }
+    if (definition.section === "SECURITY") {
+      await requireSecurityManagementPermission(userId, familyId);
+    } else {
+      await requireSettingsManagementPermission(userId, familyId);
+    }
+  } else {
+    await requireSettingsManagementPermission(userId, familyId);
+  }
+
   const device = await prisma.device.findFirst({
     where: { id: deviceId, familyId },
     select: { id: true, capabilities: true },
@@ -313,11 +360,6 @@ export async function createSettingsCommand(
   }
 
   if (type === "SET_SETTING") {
-    const definition = getDeviceSettingDefinition(payload.key);
-    if (!definition || !definition.writable || !isValidSettingValue(definition, payload.value)) {
-      throw new AppError(400, "SETTING_UNSUPPORTED", "That setting cannot be changed on this device.");
-    }
-
     const existing = await prisma.deviceSetting.findUnique({
       where: {
         deviceId_key: {
@@ -354,7 +396,18 @@ async function createPendingCommand(
     },
   });
 
-  return emitCommand(serializeCommand(command));
+  const view = emitCommand(serializeCommand(command));
+  await recordAuditLog({
+    familyId,
+    actorUserId: userId,
+    deviceId,
+    commandId: command.id,
+    action: "COMMAND_CREATED",
+    status: "PENDING",
+    result: "Command queued for device",
+    metadata: auditMetadataForCommand(type, payload, { status: "PENDING" }),
+  });
+  return view;
 }
 
 export async function getCommandForUser(
@@ -363,7 +416,7 @@ export async function getCommandForUser(
   deviceId: string,
   commandId: string,
 ): Promise<CommandView> {
-  await requireFamilyMember(userId, familyId);
+  await requireDeviceViewPermission(userId, familyId);
   const command = await prisma.command.findFirst({
     where: {
       id: commandId,
@@ -408,7 +461,7 @@ export async function listRecentDeviceCommands(
   familyId: string,
   deviceId: string,
 ): Promise<CommandView[]> {
-  await requireFamilyMember(userId, familyId);
+  await requireDeviceViewPermission(userId, familyId);
   const device = await prisma.device.findFirst({
     where: { id: deviceId, familyId },
     select: { id: true },
@@ -432,10 +485,7 @@ export async function cancelCommandForUser(
   deviceId: string,
   commandId: string,
 ): Promise<CommandView> {
-  const membership = await requireFamilyMember(userId, familyId);
-  if (!canEnrollDevices(membership.role)) {
-    throw new AppError(403, "FORBIDDEN", "You cannot cancel commands for this family.");
-  }
+  await requireDeviceManagePermission(userId, familyId);
 
   const command = await prisma.command.findFirst({
     where: { id: commandId, familyId, deviceId },
@@ -463,7 +513,21 @@ export async function cancelCommandForUser(
     },
   });
 
-  return emitCommand(serializeCommand(cancelled));
+  const view = emitCommand(serializeCommand(cancelled));
+  await recordAuditLog({
+    familyId,
+    actorUserId: userId,
+    deviceId,
+    commandId: cancelled.id,
+    action: "COMMAND_CANCELLED",
+    status: "SUCCESS",
+    result: "Command cancelled",
+    metadata: auditMetadataForCommand(cancelled.type, cancelled.payload, {
+      status: cancelled.status,
+      errorCode: cancelled.errorCode,
+    }),
+  });
+  return view;
 }
 
 async function listRecentCommandsByTypes(
@@ -472,7 +536,7 @@ async function listRecentCommandsByTypes(
   deviceId: string,
   types: readonly CommandType[],
 ): Promise<CommandView[]> {
-  await requireFamilyMember(userId, familyId);
+  await requireDeviceViewPermission(userId, familyId);
   const device = await prisma.device.findFirst({
     where: { id: deviceId, familyId },
     select: { id: true },
@@ -694,7 +758,7 @@ export async function completeCommandForDevice(
     }
 
     return emitCommand(serializeCommand(updated));
-  }).then((command) => {
+  }).then(async (command) => {
     if (input.status === "SUCCESS") {
       const kind =
         current.type === "CREATE_CONTACT" ||
@@ -717,6 +781,21 @@ export async function completeCommandForDevice(
         });
       }
     }
+
+    await recordAuditLog({
+      familyId: command.familyId,
+      actorUserId: command.createdBy,
+      deviceId: command.deviceId,
+      commandId: command.id,
+      action: "COMMAND_COMPLETED",
+      status: input.status === "SUCCESS" ? "SUCCESS" : "FAILED",
+      result: input.status === "SUCCESS" ? "Command completed" : (input.error?.code ?? "COMMAND_FAILED"),
+      metadata: auditMetadataForCommand(command.type, current.payload, {
+        status: command.status,
+        errorCode: command.errorCode,
+      }),
+    });
+
     return command;
   });
 }

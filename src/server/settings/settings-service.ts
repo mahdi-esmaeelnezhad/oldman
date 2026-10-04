@@ -3,7 +3,11 @@ import {
   getDeviceSettingDefinition,
   isValidSettingValue,
 } from "@/config/device-settings";
-import { canManageSettings, requireFamilyMember } from "@/server/auth/authorization";
+import {
+  canManageSecurity,
+  canManageSettings,
+  requireDeviceViewPermission,
+} from "@/server/auth/authorization";
 import { parseDeviceCapabilities } from "@/server/devices/capabilities";
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/server/http/api-error";
@@ -42,7 +46,7 @@ export async function getDeviceSettingsPage(
   familyId: string,
   deviceId: string,
 ): Promise<DeviceSettingsPage> {
-  const membership = await requireFamilyMember(userId, familyId);
+  const membership = await requireDeviceViewPermission(userId, familyId);
   const device = await prisma.device.findFirst({
     where: { id: deviceId, familyId },
     select: { id: true, capabilities: true },
@@ -52,7 +56,9 @@ export async function getDeviceSettingsPage(
   }
 
   const capabilities = parseDeviceCapabilities(device.capabilities);
-  const canManage = canManageSettings(membership.role);
+  const canManageNonSecurity = canManageSettings(membership.role);
+  const canManageSecuritySettings = canManageSecurity(membership.role);
+  const canManage = canManageNonSecurity || canManageSecuritySettings;
   const rows = await prisma.deviceSetting.findMany({
     where: { deviceId },
     orderBy: [{ section: "asc" }, { key: "asc" }],
@@ -70,13 +76,15 @@ export async function getDeviceSettingsPage(
     }
 
     const writable = row.writable && definition.writable;
+    const canEditSetting =
+      definition.section === "SECURITY" ? canManageSecuritySettings : canManageNonSecurity;
     settings.push({
       key: row.key,
       section: row.section,
       value,
       writable,
       valueType: definition.valueType,
-      active: Boolean(canManage && capabilities.SET_SETTING && writable),
+      active: Boolean(canEditSetting && capabilities.SET_SETTING && writable),
     });
   }
 

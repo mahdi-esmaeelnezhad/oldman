@@ -1,6 +1,6 @@
 import type { DevicePlatform, DeviceStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
-import { requireFamilyMember } from "@/server/auth/authorization";
+import { requireDeviceViewPermission } from "@/server/auth/authorization";
 import { AppError } from "@/server/http/api-error";
 
 export type DeviceDashboard = {
@@ -31,7 +31,7 @@ export async function getDeviceForUser(
   familyId: string,
   deviceId: string,
 ): Promise<DeviceDashboard> {
-  await requireFamilyMember(userId, familyId);
+  await requireDeviceViewPermission(userId, familyId);
 
   const device = await prisma.device.findFirst({
     where: {

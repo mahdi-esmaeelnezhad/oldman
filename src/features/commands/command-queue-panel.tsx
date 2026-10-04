@@ -8,7 +8,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { useState } from "react";
 import { messageForApiError } from "@/config/api-errors";
-import { commandStatusLabels, copy } from "@/config/copy";
+import { commandStatusLabels, commandTypeLabels, copy } from "@/config/copy";
 import { commandStatusColor, isActiveCommand, isCancellableCommand } from "@/features/commands/command-status";
 import { useFamilyRealtime } from "@/features/realtime/use-family-realtime";
 import { formatDateTime } from "@/lib/format-date-time";
@@ -98,7 +98,7 @@ export function CommandQueuePanel({
             <Paper key={command.commandId} variant="outlined" sx={{ p: 2 }}>
               <Stack spacing={1}>
                 <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography>{command.type}</Typography>
+                  <Typography>{commandTypeLabels[command.type]}</Typography>
                   <Chip
                     size="small"
                     label={commandStatusLabels[command.status]}

@@ -108,6 +108,30 @@ enum DeviceSettingSection {
   @@map("device_setting_section")
 }
 
+enum AuditAction {
+  COMMAND_CREATED
+  COMMAND_CANCELLED
+  COMMAND_COMPLETED
+  COMMAND_EXPIRED
+  ENROLLMENT_CREATED
+  DEVICE_ENROLLED
+  GEOFENCE_CREATED
+  GEOFENCE_UPDATED
+  GEOFENCE_DELETED
+  MEMBER_INVITED
+
+  @@map("audit_action")
+}
+
+enum AuditStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  DENIED
+
+  @@map("audit_status")
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -122,6 +146,7 @@ model User {
   createdEnrollmentTokens EnrollmentToken[] @relation("EnrollmentCreator")
   createdCommands         Command[]         @relation("CommandCreator")
   createdGeofences        Geofence[]        @relation("GeofenceCreator")
+  auditLogs               AuditLog[]        @relation("AuditActor")
 
   @@map("users")
 }
@@ -139,6 +164,7 @@ model Family {
   geofences        Geofence[]
   geofenceEvents   GeofenceEvent[]
   notifications    FamilyNotification[]
+  auditLogs        AuditLog[]
 
   @@map("families")
 }
@@ -198,6 +224,7 @@ model Device {
   geofences       Geofence[]
   geofenceEvents  GeofenceEvent[]
   notifications   FamilyNotification[]
+  auditLogs       AuditLog[]
 
   @@index([familyId])
   @@index([status])
@@ -292,9 +319,10 @@ model Command {
   startedAt    DateTime?     @map("started_at")
   completedAt  DateTime?     @map("completed_at")
 
-  family  Family @relation(fields: [familyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  device  Device @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  creator User   @relation("CommandCreator", fields: [createdBy], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  family    Family    @relation(fields: [familyId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  creator   User      @relation("CommandCreator", fields: [createdBy], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  auditLogs AuditLog[]
 
   @@index([deviceId, status])
   @@index([familyId])
@@ -405,4 +433,29 @@ model EnrollmentToken {
   @@index([familyId])
   @@index([expiresAt])
   @@map("enrollment_tokens")
+}
+
+model AuditLog {
+  id          String      @id @default(uuid()) @db.Uuid
+  familyId    String      @map("family_id") @db.Uuid
+  actorUserId String?     @map("actor_user_id") @db.Uuid
+  deviceId    String?     @map("device_id") @db.Uuid
+  commandId   String?     @map("command_id") @db.Uuid
+  action      AuditAction
+  result      String?
+  status      AuditStatus
+  metadata    Json?
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  family  Family   @relation(fields: [familyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  actor   User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  device  Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  command Command? @relation(fields: [commandId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([familyId, createdAt])
+  @@index([deviceId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([commandId])
+  @@index([action])
+  @@map("audit_logs")
 }

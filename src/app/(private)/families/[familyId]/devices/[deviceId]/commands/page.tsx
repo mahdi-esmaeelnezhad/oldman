@@ -6,7 +6,7 @@ import { copy } from "@/config/copy";
 import { CommandQueuePanel } from "@/features/commands/command-queue-panel";
 import { deviceIdSchema } from "@/features/devices/schemas";
 import { familyIdSchema } from "@/features/families/schemas";
-import { canEnrollDevices, requireFamilyMember } from "@/server/auth/authorization";
+import { canManageDevice, requireFamilyMember } from "@/server/auth/authorization";
 import { requirePageUser } from "@/server/auth/session";
 import { listRecentDeviceCommands } from "@/server/commands/command-service";
 import { AppError } from "@/server/http/api-error";
@@ -26,7 +26,7 @@ async function loadPage(userId: string, familyId: string, deviceId: string) {
       listRecentDeviceCommands(userId, familyId, deviceId),
     ]);
     return {
-      canManage: canEnrollDevices(membership.role),
+      canManage: canManageDevice(membership.role),
       commands,
     };
   } catch (error: unknown) {

@@ -1,0 +1,825 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Family Care — Android Device Agent API Handbook</title>
+  <style>
+    @page { margin: 18mm; }
+    body {
+      font-family: Segoe UI, Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.45;
+      color: #111;
+      direction: ltr;
+      text-align: left;
+    }
+    h1, h2, h3 { page-break-after: avoid; }
+    pre, code { font-family: Consolas, Menlo, monospace; }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 9.5pt;
+    }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; vertical-align: top; }
+    th { background: #f0f3f6; }
+    blockquote {
+      border-left: 4px solid #4a90e2;
+      margin-left: 0;
+      padding: 6px 12px;
+      background: #f7fbff;
+    }
+  </style>
+</head>
+<body><h1>Family Care — Android Device Agent API Handbook</h1>
+<p><strong>Audience:</strong> Android / Kotlin Device Owner (DPC) engineer and Cursor agents working on the parent-phone app.<br><strong>Source of truth:</strong> Next.js backend contracts in this repository (<code>src/types/contracts/*</code>, <code>src/app/api/device/*</code>, <code>src/app/api/enrollments/redeem</code>).<br><strong>Base URL (local):</strong> <code>http://localhost:3000</code><br><strong>OpenAPI (human UI):</strong> <code>http://localhost:3000/swagger</code><br><strong>OpenAPI JSON:</strong> <code>http://localhost:3000/api/openapi</code></p>
+<blockquote>
+<p>این سند مخصوص اپ اندروید روی گوشی والد است. اپ مراقب Next.js/PWA است و مستقیماً API اندروید را صدا نمی‌زند. اندروید فقط با backend از طریق Command و Device Agent APIs صحبت می‌کند.</p>
+</blockquote>
+<hr>
+<h2>1. Architecture (must follow)</h2>
+<pre><code class="language-text">Caregiver PWA
+    → Next.js API (auth + permissions)
+    → Command row (PENDING)
+    → Android Agent polls /api/device/commands/pending
+    → Android executes via official Android APIs
+    → Android reports progress + result
+    → Next.js updates DB + realtime events
+    → Caregiver PWA
+</code></pre>
+<p>Rules:</p>
+<ol>
+<li>Next.js never calls Android Contacts/Settings APIs directly.</li>
+<li>Android never talks to the caregiver UI; only to Next.js.</li>
+<li>If an operation is not officially supported → return <code>UNSUPPORTED</code> (do not hack with Accessibility/root/UI automation).</li>
+<li>Device identity is an <strong>app-generated random id</strong> (<code>deviceIdentifier</code>). Never use IMEI/MAC/serial as identity.</li>
+<li><code>deviceCredential</code> is a secret. Store in EncryptedSharedPreferences / Keystore. Never log it.</li>
+</ol>
+<hr>
+<h2>2. Error format (all APIs)</h2>
+<pre><code class="language-json">{
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;DEVICE_UNAUTHENTICATED&quot;,
+    &quot;message&quot;: &quot;Device credentials are required.&quot;
+  }
+}
+</code></pre>
+<p>Common codes for device agent:</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>HTTP</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>DEVICE_UNAUTHENTICATED</code></td>
+<td>401</td>
+<td>Missing/invalid Bearer credential</td>
+</tr>
+<tr>
+<td><code>ENROLLMENT_TOKEN_INVALID</code></td>
+<td>400</td>
+<td>QR token invalid/expired/used</td>
+</tr>
+<tr>
+<td><code>DEVICE_IDENTIFIER_IN_USE</code></td>
+<td>409</td>
+<td><code>deviceIdentifier</code> already enrolled</td>
+</tr>
+<tr>
+<td><code>COMMAND_NOT_FOUND</code></td>
+<td>404</td>
+<td>Unknown command for this device</td>
+</tr>
+<tr>
+<td><code>COMMAND_ALREADY_FINISHED</code></td>
+<td>409</td>
+<td>Command already terminal</td>
+</tr>
+<tr>
+<td><code>COMMAND_NOT_CANCELLABLE</code></td>
+<td>409</td>
+<td>Cannot cancel while <code>EXECUTING</code></td>
+</tr>
+<tr>
+<td><code>GEOFENCE_NOT_FOUND</code></td>
+<td>404</td>
+<td>Geofence missing/disabled</td>
+</tr>
+<tr>
+<td><code>VALIDATION_ERROR</code></td>
+<td>400</td>
+<td>Invalid/schema invalid</td>
+</tr>
+<tr>
+<td><code>INVALID_JSON</code></td>
+<td>400</td>
+<td>Body not JSON</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>3. Authentication</h2>
+<h3>3.1 Enrollment (no auth yet)</h3>
+<p><code>POST /api/enrollments/redeem</code> has <strong>no</strong> Authorization header.</p>
+<h3>3.2 After enrollment (all device agent APIs)</h3>
+<pre><code class="language-http">Authorization: Bearer &lt;deviceCredential&gt;
+Content-Type: application/json
+</code></pre>
+<p>Notes:</p>
+<ul>
+<li><code>deviceCredential</code> is returned <strong>once</strong> in enrollment response. Persist immediately.</li>
+<li>Credential length must be ≥ 20 characters.</li>
+<li>Backend stores only a hash; plaintext cannot be recovered.</li>
+<li>Every authenticated device call also marks the device <code>ONLINE</code> and updates <code>lastSeenAt</code>.</li>
+</ul>
+<hr>
+<h2>4. Enrollment</h2>
+<h3>4.1 QR payload (scanned by Android)</h3>
+<p>Caregiver PWA shows a QR encoding JSON:</p>
+<pre><code class="language-json">{
+  &quot;v&quot;: 1,
+  &quot;token&quot;: &quot;&lt;one-time-enrollment-token&gt;&quot;
+}
+</code></pre>
+<ul>
+<li><code>v</code> must be <code>1</code>.</li>
+<li><code>token</code> is short-lived and single-use (≈ 10 minutes on server).</li>
+</ul>
+<h3>4.2 Redeem enrollment</h3>
+<p><code>POST /api/enrollments/redeem</code></p>
+<h4>Request payload</h4>
+<pre><code class="language-json">{
+  &quot;token&quot;: &quot;string min20 max200&quot;,
+  &quot;deviceIdentifier&quot;: &quot;string min8 max200 (app-generated UUID recommended)&quot;,
+  &quot;name&quot;: &quot;string min1 max80&quot;,
+  &quot;platform&quot;: &quot;ANDROID&quot;,
+  &quot;manufacturer&quot;: &quot;optional string&quot;,
+  &quot;model&quot;: &quot;optional string&quot;,
+  &quot;androidVersion&quot;: &quot;optional string e.g. 14&quot;,
+  &quot;androidSdk&quot;: 34,
+  &quot;appVersion&quot;: &quot;optional string e.g. 1.0.0&quot;
+}
+</code></pre>
+<p><code>platform</code> is <strong>required</strong> and must be exactly <code>&quot;ANDROID&quot;</code>.</p>
+<h4>Success response <code>201</code></h4>
+<pre><code class="language-json">{
+  &quot;device&quot;: {
+    &quot;id&quot;: &quot;uuid&quot;,
+    &quot;familyId&quot;: &quot;uuid&quot;,
+    &quot;name&quot;: &quot;مادر&quot;,
+    &quot;platform&quot;: &quot;ANDROID&quot;,
+    &quot;status&quot;: &quot;PENDING&quot;,
+    &quot;deviceCredential&quot;: &quot;&lt;SECRET — store securely, never log&gt;&quot;
+  }
+}
+</code></pre>
+<h4>Android responsibilities after enroll</h4>
+<ol>
+<li>Persist <code>device.id</code>, <code>familyId</code>, <code>deviceCredential</code>, <code>deviceIdentifier</code>.</li>
+<li>Start command polling loop.</li>
+<li>Report capabilities eventually (future); for now server may seed demo capabilities.</li>
+</ol>
+<hr>
+<h2>5. Command lifecycle (critical)</h2>
+<p>Statuses:</p>
+<pre><code class="language-text">PENDING → SENT → RECEIVED → EXECUTING → SUCCESS | FAILED | UNSUPPORTED
+                              ↘ EXPIRED | CANCELLED (terminal)
+</code></pre>
+<h3>Device-side expected flow</h3>
+<ol>
+<li><code>GET /api/device/commands/pending</code><ul>
+<li>Server returns up to 20 commands currently <code>PENDING</code>.</li>
+<li>Server <strong>atomically marks them <code>SENT</code></strong> when returned.</li>
+</ul>
+</li>
+<li>Optionally <code>PATCH /api/device/commands/{commandId}</code> with <code>{ &quot;status&quot;: &quot;RECEIVED&quot; }</code>.</li>
+<li>When execution starts: <code>PATCH</code> with <code>{ &quot;status&quot;: &quot;EXECUTING&quot; }</code>.</li>
+<li>When finished: <code>POST /api/device/commands/{commandId}</code> with result (<code>SUCCESS</code> / <code>FAILED</code> / <code>UNSUPPORTED</code>).</li>
+</ol>
+<p>Rules:</p>
+<ul>
+<li>Do not execute the same non-idempotent command twice.</li>
+<li>If command expired on server → it will not appear in pending (or becomes <code>EXPIRED</code>).</li>
+<li>While <code>EXECUTING</code>, caregiver cancel is rejected.</li>
+<li>Prefer reporting <code>UNSUPPORTED</code> over crashing or faking success.</li>
+</ul>
+<hr>
+<h2>6. Device Agent APIs</h2>
+<h3>6.1 Pull pending commands</h3>
+<p><code>GET /api/device/commands/pending</code></p>
+<h4>Headers</h4>
+<pre><code class="language-http">Authorization: Bearer &lt;deviceCredential&gt;
+</code></pre>
+<h4>Success <code>200</code></h4>
+<pre><code class="language-json">{
+  &quot;commands&quot;: [
+    {
+      &quot;commandId&quot;: &quot;uuid&quot;,
+      &quot;id&quot;: &quot;uuid&quot;,
+      &quot;familyId&quot;: &quot;uuid&quot;,
+      &quot;deviceId&quot;: &quot;uuid&quot;,
+      &quot;createdBy&quot;: &quot;uuid&quot;,
+      &quot;type&quot;: &quot;CREATE_CONTACT&quot;,
+      &quot;payload&quot;: { &quot;displayName&quot;: &quot;دکتر&quot;, &quot;phoneNumber&quot;: &quot;+9821...&quot; },
+      &quot;status&quot;: &quot;SENT&quot;,
+      &quot;resultData&quot;: null,
+      &quot;errorCode&quot;: null,
+      &quot;errorMessage&quot;: null,
+      &quot;createdAt&quot;: &quot;2026-10-04T06:13:44.217Z&quot;,
+      &quot;expiresAt&quot;: &quot;2026-10-05T06:13:44.215Z&quot;,
+      &quot;sentAt&quot;: &quot;2026-10-04T06:14:00.000Z&quot;,
+      &quot;receivedAt&quot;: null,
+      &quot;startedAt&quot;: null,
+      &quot;completedAt&quot;: null
+    }
+  ]
+}
+</code></pre>
+<p>Notes:</p>
+<ul>
+<li><code>commandId</code> and <code>id</code> are the same UUID.</li>
+<li>Empty list is valid: <code>{ &quot;commands&quot;: [] }</code>.</li>
+<li>Poll periodically (e.g. every 5–15s) and also after reconnect / FCM wake if available later.</li>
+</ul>
+<hr>
+<h3>6.2 Update command progress</h3>
+<p><code>PATCH /api/device/commands/{commandId}</code></p>
+<h4>Request payload</h4>
+<pre><code class="language-json">{ &quot;status&quot;: &quot;RECEIVED&quot; }
+</code></pre>
+<p>or</p>
+<pre><code class="language-json">{ &quot;status&quot;: &quot;EXECUTING&quot; }
+</code></pre>
+<p>Only <code>RECEIVED</code> and <code>EXECUTING</code> are allowed here.</p>
+<h4>Success <code>200</code></h4>
+<pre><code class="language-json">{
+  &quot;command&quot;: {
+    &quot;commandId&quot;: &quot;uuid&quot;,
+    &quot;id&quot;: &quot;uuid&quot;,
+    &quot;status&quot;: &quot;EXECUTING&quot;,
+    &quot;receivedAt&quot;: &quot;...&quot;,
+    &quot;startedAt&quot;: &quot;...&quot;,
+    &quot;...&quot;: &quot;same CommandView fields as pending&quot;
+  }
+}
+</code></pre>
+<hr>
+<h3>6.3 Submit command result</h3>
+<p><code>POST /api/device/commands/{commandId}</code></p>
+<h4>Success result payload</h4>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;SUCCESS&quot;,
+  &quot;data&quot;: { &quot;...type-specific fields...&quot; },
+  &quot;error&quot;: null
+}
+</code></pre>
+<h4>Failure / unsupported payload</h4>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;FAILED&quot;,
+  &quot;data&quot;: null,
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;CONTACTS_PERMISSION_DENIED&quot;,
+    &quot;message&quot;: &quot;WRITE_CONTACTS permission missing.&quot;
+  }
+}
+</code></pre>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;UNSUPPORTED&quot;,
+  &quot;data&quot;: null,
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;SYSTEM_APP&quot;,
+    &quot;message&quot;: &quot;Protected application.&quot;
+  }
+}
+</code></pre>
+<h4>Success response <code>200</code></h4>
+<pre><code class="language-json">{
+  &quot;command&quot;: {
+    &quot;commandId&quot;: &quot;uuid&quot;,
+    &quot;status&quot;: &quot;SUCCESS&quot;,
+    &quot;resultData&quot;: { &quot;...echoed/stored data...&quot; },
+    &quot;errorCode&quot;: null,
+    &quot;errorMessage&quot;: null,
+    &quot;completedAt&quot;: &quot;ISO-8601&quot;
+  }
+}
+</code></pre>
+<hr>
+<h3>6.4 Report location</h3>
+<p><code>POST /api/device/location</code></p>
+<p>Use for last-known location updates (not continuous tracking). Prefer official location APIs + geofencing APIs.</p>
+<h4>Request payload</h4>
+<pre><code class="language-json">{
+  &quot;latitude&quot;: 35.6892,
+  &quot;longitude&quot;: 51.3890,
+  &quot;recordedAt&quot;: &quot;2026-10-04T06:20:00.000Z&quot;,
+  &quot;locationPermission&quot;: &quot;GRANTED&quot;,
+  &quot;locationServiceEnabled&quot;: true
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>latitude</code></td>
+<td>yes</td>
+<td>-90..90</td>
+</tr>
+<tr>
+<td><code>longitude</code></td>
+<td>yes</td>
+<td>-180..180</td>
+</tr>
+<tr>
+<td><code>recordedAt</code></td>
+<td>no</td>
+<td>ISO datetime; server uses now if omitted</td>
+</tr>
+<tr>
+<td><code>locationPermission</code></td>
+<td>no</td>
+<td><code>UNKNOWN</code> | <code>PROMPT</code> | <code>GRANTED</code> | <code>DENIED</code></td>
+</tr>
+<tr>
+<td><code>locationServiceEnabled</code></td>
+<td>no</td>
+<td>boolean</td>
+</tr>
+</tbody></table>
+<h4>Success <code>200</code></h4>
+<pre><code class="language-json">{ &quot;ok&quot;: true }
+</code></pre>
+<hr>
+<h3>6.5 Report geofence ENTER/EXIT</h3>
+<p><code>POST /api/device/geofence-events</code></p>
+<h4>Request payload</h4>
+<pre><code class="language-json">{
+  &quot;geofenceId&quot;: &quot;uuid&quot;,
+  &quot;type&quot;: &quot;ENTERED&quot;,
+  &quot;occurredAt&quot;: &quot;2026-10-04T06:25:00.000Z&quot;
+}
+</code></pre>
+<p><code>type</code>: <code>ENTERED</code> | <code>EXITED</code><br><code>occurredAt</code> optional ISO datetime.</p>
+<h4>Response</h4>
+<p>Accepted new event (<code>201</code>):</p>
+<pre><code class="language-json">{
+  &quot;accepted&quot;: true,
+  &quot;notificationId&quot;: &quot;uuid&quot;
+}
+</code></pre>
+<p>Deduped within server window (<code>200</code>):</p>
+<pre><code class="language-json">{
+  &quot;accepted&quot;: false,
+  &quot;notificationId&quot;: null
+}
+</code></pre>
+<p>Server dedupes identical geofence events for ~15 minutes.</p>
+<hr>
+<h2>7. Command catalog (payload in → result data out)</h2>
+<p>Use these exact <code>type</code> strings and payload shapes. Result <code>data</code> must match the SUCCESS shape for that type.</p>
+<h3>7.1 GET_DEVICE_INFO</h3>
+<p><strong>Inbound payload:</strong> <code>{}</code></p>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{
+  &quot;manufacturer&quot;: &quot;Samsung&quot;,
+  &quot;model&quot;: &quot;Galaxy A54&quot;,
+  &quot;androidVersion&quot;: &quot;14&quot;,
+  &quot;androidSdk&quot;: 34,
+  &quot;appVersion&quot;: &quot;1.0.0&quot;
+}
+</code></pre>
+<p>Nullable strings allowed for manufacturer/model/versions if unknown (<code>null</code>).</p>
+<hr>
+<h3>7.2 GET_BATTERY</h3>
+<p><strong>Inbound payload:</strong> <code>{}</code></p>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{
+  &quot;levelPercent&quot;: 80,
+  &quot;charging&quot;: false
+}
+</code></pre>
+<hr>
+<h3>7.3 GET_STORAGE</h3>
+<p><strong>Inbound payload:</strong> <code>{}</code></p>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{
+  &quot;totalBytes&quot;: 128000000000,
+  &quot;availableBytes&quot;: 42000000000
+}
+</code></pre>
+<p>Use raw byte numbers (not strings).</p>
+<hr>
+<h3>7.4 CREATE_CONTACT</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{
+  &quot;displayName&quot;: &quot;دکتر نمونه&quot;,
+  &quot;phoneNumber&quot;: &quot;+982100000000&quot;
+}
+</code></pre>
+<p><strong>SUCCESS data (required):</strong></p>
+<pre><code class="language-json">{
+  &quot;contactId&quot;: &quot;android-or-app-stable-id&quot;
+}
+</code></pre>
+<p><code>contactId</code> is required by backend to persist the contact. Generate a stable id if Android does not provide one you can reuse.</p>
+<hr>
+<h3>7.5 UPDATE_CONTACT</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{
+  &quot;contactId&quot;: &quot;contact-xyz&quot;,
+  &quot;displayName&quot;: &quot;optional new name&quot;,
+  &quot;phoneNumber&quot;: &quot;optional new phone&quot;
+}
+</code></pre>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{ &quot;contactId&quot;: &quot;contact-xyz&quot; }
+</code></pre>
+<hr>
+<h3>7.6 DELETE_CONTACT</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{ &quot;contactId&quot;: &quot;contact-xyz&quot; }
+</code></pre>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{ &quot;contactId&quot;: &quot;contact-xyz&quot; }
+</code></pre>
+<hr>
+<h3>7.7 GET_INSTALLED_APPS</h3>
+<p><strong>Inbound payload:</strong> <code>{}</code></p>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{
+  &quot;apps&quot;: [
+    { &quot;packageName&quot;: &quot;org.telegram.messenger&quot;, &quot;label&quot;: &quot;Telegram&quot; }
+  ]
+}
+</code></pre>
+<hr>
+<h3>7.8 INSTALL_APP</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{ &quot;packageName&quot;: &quot;com.spotify.music&quot; }
+</code></pre>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{ &quot;packageName&quot;: &quot;com.spotify.music&quot; }
+</code></pre>
+<p>If silent install is not possible → <code>UNSUPPORTED</code> (do not fake). Capability flag <code>silentInstall</code> exists in contracts; currently often <code>false</code>.</p>
+<hr>
+<h3>7.9 UNINSTALL_APP</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{ &quot;packageName&quot;: &quot;com.example.app&quot; }
+</code></pre>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{ &quot;packageName&quot;: &quot;com.example.app&quot; }
+</code></pre>
+<p>If protected/system app → prefer <code>UNSUPPORTED</code> with a clear error code.</p>
+<hr>
+<h3>7.10 ENABLE_APP / DISABLE_APP</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{ &quot;packageName&quot;: &quot;com.example.app&quot; }
+</code></pre>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{ &quot;packageName&quot;: &quot;com.example.app&quot; }
+</code></pre>
+<hr>
+<h3>7.11 GET_LOCATION</h3>
+<p><strong>Inbound payload:</strong> <code>{}</code></p>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{
+  &quot;latitude&quot;: 35.6892,
+  &quot;longitude&quot;: 51.3890,
+  &quot;recordedAt&quot;: &quot;2026-10-04T06:20:00.000Z&quot;
+}
+</code></pre>
+<p>Also keep posting <code>/api/device/location</code> for dashboard last-known location.</p>
+<hr>
+<h3>7.12 CREATE_GEOFENCE</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{
+  &quot;geofenceId&quot;: &quot;uuid-from-server&quot;,
+  &quot;name&quot;: &quot;خانه&quot;,
+  &quot;latitude&quot;: 35.6892,
+  &quot;longitude&quot;: 51.3890,
+  &quot;radiusMeters&quot;: 200
+}
+</code></pre>
+<p>Constraints used by caregiver API: radius 50..50000 meters.</p>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{ &quot;geofenceId&quot;: &quot;uuid-from-server&quot; }
+</code></pre>
+<p>Android must:</p>
+<ol>
+<li>Register the geofence with official Android Geofencing API using <code>payload.geofenceId</code> as the request id / stable key.</li>
+<li>Echo the same <code>geofenceId</code> in SUCCESS data.</li>
+<li>Use that same UUID in <code>/api/device/geofence-events</code>.</li>
+</ol>
+<hr>
+<h3>7.13 UPDATE_GEOFENCE</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{
+  &quot;geofenceId&quot;: &quot;uuid&quot;,
+  &quot;name&quot;: &quot;خانه&quot;,
+  &quot;latitude&quot;: 35.69,
+  &quot;longitude&quot;: 51.39,
+  &quot;radiusMeters&quot;: 250,
+  &quot;enabled&quot;: true
+}
+</code></pre>
+<p>All fields except <code>geofenceId</code> optional.</p>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{ &quot;geofenceId&quot;: &quot;uuid&quot; }
+</code></pre>
+<hr>
+<h3>7.14 DELETE_GEOFENCE</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{ &quot;geofenceId&quot;: &quot;uuid&quot; }
+</code></pre>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{ &quot;geofenceId&quot;: &quot;uuid&quot; }
+</code></pre>
+<hr>
+<h3>7.15 GET_SETTINGS</h3>
+<p><strong>Inbound payload:</strong> <code>{}</code></p>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{
+  &quot;settings&quot;: {
+    &quot;device_name&quot;: &quot;مادر&quot;,
+    &quot;screen_timeout_seconds&quot;: 60,
+    &quot;developer_options&quot;: false,
+    &quot;wifi_enabled&quot;: true,
+    &quot;mobile_data_enabled&quot;: true,
+    &quot;brightness&quot;: 70,
+    &quot;auto_brightness&quot;: true,
+    &quot;font_scale&quot;: 1.15,
+    &quot;ring_volume&quot;: 6,
+    &quot;media_volume&quot;: 8,
+    &quot;do_not_disturb&quot;: false,
+    &quot;screen_lock_enabled&quot;: true,
+    &quot;install_unknown_apps&quot;: false,
+    &quot;auto_update_apps&quot;: true
+  }
+}
+</code></pre>
+<p>Values must be <code>string | number | boolean</code> only.</p>
+<p>Known keys (backend catalog):</p>
+<table>
+<thead>
+<tr>
+<th>key</th>
+<th>type</th>
+<th>writable</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>device_name</code></td>
+<td>string</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>screen_timeout_seconds</code></td>
+<td>number</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>developer_options</code></td>
+<td>boolean</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>wifi_enabled</code></td>
+<td>boolean</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>mobile_data_enabled</code></td>
+<td>boolean</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>airplane_mode</code></td>
+<td>boolean</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>brightness</code></td>
+<td>number</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>auto_brightness</code></td>
+<td>boolean</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>font_scale</code></td>
+<td>number</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>ring_volume</code></td>
+<td>number</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>media_volume</code></td>
+<td>number</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>do_not_disturb</code></td>
+<td>boolean</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>screen_lock_enabled</code></td>
+<td>boolean</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>unknown_sources</code></td>
+<td>boolean</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>install_unknown_apps</code></td>
+<td>boolean</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>auto_update_apps</code></td>
+<td>boolean</td>
+<td>yes</td>
+</tr>
+</tbody></table>
+<p>Only report keys you can read via official APIs. Omit unsupported keys rather than inventing values.</p>
+<hr>
+<h3>7.16 SET_SETTING</h3>
+<p><strong>Inbound payload:</strong></p>
+<pre><code class="language-json">{
+  &quot;key&quot;: &quot;brightness&quot;,
+  &quot;value&quot;: 70
+}
+</code></pre>
+<p><strong>SUCCESS data:</strong></p>
+<pre><code class="language-json">{ &quot;key&quot;: &quot;brightness&quot; }
+</code></pre>
+<p>If key/value cannot be applied officially → <code>UNSUPPORTED</code> or <code>FAILED</code> with clear error.</p>
+<hr>
+<h2>8. DeviceCapability contract</h2>
+<p>Android should eventually report a capability map matching:</p>
+<pre><code class="language-json">{
+  &quot;GET_DEVICE_INFO&quot;: true,
+  &quot;GET_BATTERY&quot;: true,
+  &quot;GET_STORAGE&quot;: true,
+  &quot;CREATE_CONTACT&quot;: true,
+  &quot;UPDATE_CONTACT&quot;: true,
+  &quot;DELETE_CONTACT&quot;: true,
+  &quot;GET_INSTALLED_APPS&quot;: true,
+  &quot;INSTALL_APP&quot;: false,
+  &quot;UNINSTALL_APP&quot;: false,
+  &quot;ENABLE_APP&quot;: false,
+  &quot;DISABLE_APP&quot;: false,
+  &quot;GET_LOCATION&quot;: true,
+  &quot;CREATE_GEOFENCE&quot;: true,
+  &quot;UPDATE_GEOFENCE&quot;: true,
+  &quot;DELETE_GEOFENCE&quot;: true,
+  &quot;GET_SETTINGS&quot;: true,
+  &quot;SET_SETTING&quot;: false,
+  &quot;silentInstall&quot;: false
+}
+</code></pre>
+<p>PWA only exposes operations that are true. Do not claim true unless officially supported on the device/Android version/policy.</p>
+<hr>
+<h2>9. Minimal Kotlin agent loop (pseudo)</h2>
+<pre><code class="language-kotlin">// 1) Scan QR → EnrollmentQrPayload(v=1, token)
+// 2) POST /api/enrollments/redeem
+// 3) Save deviceCredential
+
+while (running) {
+  val pending = GET(&quot;/api/device/commands/pending&quot;) // Bearer credential
+  for (cmd in pending.commands) {
+    PATCH(&quot;/api/device/commands/${cmd.id}&quot;, body = {&quot;status&quot;:&quot;RECEIVED&quot;})
+    PATCH(&quot;/api/device/commands/${cmd.id}&quot;, body = {&quot;status&quot;:&quot;EXECUTING&quot;})
+    val result = executeOfficially(cmd.type, cmd.payload)
+    POST(&quot;/api/device/commands/${cmd.id}&quot;, body = result)
+  }
+  delay(pollInterval)
+}
+</code></pre>
+<p>Geofence callbacks (Android Geofencing API):</p>
+<pre><code class="language-kotlin">POST(&quot;/api/device/geofence-events&quot;, {
+  &quot;geofenceId&quot;: serverUuid,
+  &quot;type&quot;: &quot;ENTERED&quot;, // or EXITED
+  &quot;occurredAt&quot;: isoNow
+})
+</code></pre>
+<hr>
+<h2>10. Security checklist for Android Cursor agent</h2>
+<ul>
+<li><input disabled="" type="checkbox"> No root / Accessibility automation / UI automation for management</li>
+<li><input disabled="" type="checkbox"> No undocumented/hidden Android APIs</li>
+<li><input disabled="" type="checkbox"> No logging of <code>token</code>, <code>deviceCredential</code>, passwords</li>
+<li><input disabled="" type="checkbox"> Use app-generated <code>deviceIdentifier</code> (UUID)</li>
+<li><input disabled="" type="checkbox"> Persist credential encrypted</li>
+<li><input disabled="" type="checkbox"> Capability-driven feature flags</li>
+<li><input disabled="" type="checkbox"> Return <code>UNSUPPORTED</code> when OS/policy blocks the action</li>
+<li><input disabled="" type="checkbox"> Offline-first: commands wait in PENDING until device polls</li>
+<li><input disabled="" type="checkbox"> TLS in production; local HTTP only for emulator/dev</li>
+</ul>
+<hr>
+<h2>11. Local verification (with running Next.js)</h2>
+<ol>
+<li>Start backend: <code>pnpm dev</code> (and Postgres via <code>docker compose up -d</code>).</li>
+<li>Login caregiver, create enrollment QR from family page.</li>
+<li>Redeem with Android emulator/agent against <code>http://10.0.2.2:3000</code> (emulator → host) or LAN IP.</li>
+<li>Create a contact command from PWA.</li>
+<li>Confirm Android pending pull sees <code>SENT</code>, then result becomes <code>SUCCESS</code>.</li>
+<li>Confirm contact appears in PWA contacts page.</li>
+</ol>
+<p>Demo caregiver account (local seed):</p>
+<ul>
+<li>email: <code>owner@example.com</code></li>
+<li>password: <code>demo-password</code></li>
+</ul>
+<p>Demo device credential used by backend verify scripts (seeded):<br><code>demo-device-credential-token-sprint3-verify</code><br>(only for local verification fixtures; production devices use enrollment response credential).</p>
+<hr>
+<h2>12. Cursor prompt starter (paste to Android project)</h2>
+<pre><code class="language-text">You are implementing the Family Care Android Device Owner / DPC agent.
+
+Read docs/android-agent-api-handbook.md as the API contract source of truth.
+
+Implement:
+1) QR enrollment redeem against POST /api/enrollments/redeem
+2) Secure storage of deviceCredential
+3) Polling GET /api/device/commands/pending with Bearer auth
+4) Progress PATCH RECEIVED/EXECUTING
+5) Result POST SUCCESS/FAILED/UNSUPPORTED with type-specific data shapes
+6) Location POST /api/device/location
+7) Geofence events POST /api/device/geofence-events using official Android Geofencing API
+8) Official Android APIs only; no Accessibility/root/UI automation
+9) Capability-driven support; return UNSUPPORTED when blocked
+
+Do not invent endpoints. Match payloads/responses exactly from the handbook.
+</code></pre>
+<hr>
+<h2>13. Endpoint summary</h2>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Auth</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/api/enrollments/redeem</code></td>
+<td>none</td>
+<td>Enroll device, get credential</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/device/commands/pending</code></td>
+<td>Bearer</td>
+<td>Pull + claim PENDING→SENT</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td><code>/api/device/commands/{commandId}</code></td>
+<td>Bearer</td>
+<td>Progress RECEIVED/EXECUTING</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/device/commands/{commandId}</code></td>
+<td>Bearer</td>
+<td>Final result</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/device/location</code></td>
+<td>Bearer</td>
+<td>Last-known location</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/device/geofence-events</code></td>
+<td>Bearer</td>
+<td>ENTERED/EXITED</td>
+</tr>
+</tbody></table>
+<p>Caregiver/PWA APIs are intentionally omitted here; Android agent should not use caregiver cookie session APIs.</p>
+<hr>
+<p><em>Generated from the Next.js Family Care backend contracts for Android Device Owner integration.</em></p>
+</body>
+</html>

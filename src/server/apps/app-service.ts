@@ -1,6 +1,6 @@
 import type { DeviceAppState } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
-import { canManageApps, requireFamilyMember } from "@/server/auth/authorization";
+import { canManageApps, requireDeviceViewPermission } from "@/server/auth/authorization";
 import { parseDeviceCapabilities } from "@/server/devices/capabilities";
 import { prisma } from "@/lib/prisma";
 import { AppError } from "@/server/http/api-error";
@@ -57,7 +57,7 @@ export async function getDeviceAppsPage(
   familyId: string,
   deviceId: string,
 ): Promise<DeviceAppsPageData> {
-  const membership = await requireFamilyMember(userId, familyId);
+  const membership = await requireDeviceViewPermission(userId, familyId);
   const device = await requireDeviceInFamily(familyId, deviceId);
   const [apps, catalog] = await Promise.all([
     prisma.deviceApp.findMany({

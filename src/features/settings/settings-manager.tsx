@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import { messageForApiError } from "@/config/api-errors";
 import {
   commandStatusLabels,
+  commandTypeLabels,
   copy,
   deviceSettingKeyLabels,
   deviceSettingSectionLabels,
@@ -145,7 +146,9 @@ export function SettingsManager({
       return;
     }
     const result = (await response.json()) as { command: CommandView };
-    setCommands((current) => [result.command, ...current].slice(0, 20));
+    setCommands((current) =>
+      [result.command, ...current.filter((item) => item.id !== result.command.id)].slice(0, 20),
+    );
     setActiveCommandId(result.command.id);
   }
 
@@ -260,7 +263,7 @@ export function SettingsManager({
           <Stack spacing={1}>
             {commands.map((command) => (
               <Stack key={command.id} direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <Typography variant="body2">{command.type}</Typography>
+                <Typography variant="body2">{commandTypeLabels[command.type]}</Typography>
                 <Chip size="small" label={commandStatusLabels[command.status]} color={commandStatusColor(command.status)} />
               </Stack>
             ))}

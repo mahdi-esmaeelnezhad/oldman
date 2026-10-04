@@ -59,6 +59,7 @@ export type CommandPayloadByType = {
   };
   GET_LOCATION: NoPayload;
   CREATE_GEOFENCE: {
+    geofenceId: string;
     name: string;
     latitude: number;
     longitude: number;
