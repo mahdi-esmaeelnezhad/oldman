@@ -1,10 +1,10 @@
 allowBuilds:
   "@prisma/engines": true
-  '@scarf/scarf': set this to true or false
-  '@tree-sitter-grammars/tree-sitter-yaml': set this to true or false
-  core-js-pure: set this to true or false
+  "@scarf/scarf": false
+  "@tree-sitter-grammars/tree-sitter-yaml": false
+  core-js-pure: false
   esbuild: true
   prisma: true
-  tree-sitter: set this to true or false
-  tree-sitter-json: set this to true or false
+  tree-sitter: false
+  tree-sitter-json: false
   unrs-resolver: true
